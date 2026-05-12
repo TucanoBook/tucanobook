@@ -7,34 +7,11 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security & compression
 app.use(compression());
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: [
-          "'self'",
-          "'unsafe-inline'",
-          'https://www.gstatic.com',
-          'https://cdn.jsdelivr.net',
-        ],
-        connectSrc: [
-          "'self'",
-          'https://*.googleapis.com',
-          'https://*.firebaseio.com',
-          'https://firestore.googleapis.com',
-        ],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:'],
-      },
-    },
-  })
-);
+// CSP desativado para permitir Firebase SDK via CDN e inline handlers
+app.use(helmet({ contentSecurityPolicy: false }));
 
-// Expose Firebase config (safe — Firebase client config is always public)
+// Expose Firebase config
 app.get('/api/config', (req, res) => {
   const config = {
     apiKey:            process.env.FIREBASE_API_KEY,
@@ -45,22 +22,17 @@ app.get('/api/config', (req, res) => {
     appId:             process.env.FIREBASE_APP_ID,
   };
 
-  const missing = Object.entries(config)
-    .filter(([, v]) => !v)
-    .map(([k]) => k);
-
+  const missing = Object.entries(config).filter(([,v])=>!v).map(([k])=>k);
   if (missing.length) {
-    console.warn('Firebase config missing:', missing);
-    return res.status(500).json({ error: 'Firebase não configurado. Verifique as variáveis de ambiente.', missing });
+    return res.status(500).json({ error: 'Firebase não configurado.', missing });
   }
-
   res.json(config);
 });
 
-// Health check for Railway
+// Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
-// Serve static files
+// Static files
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1d' }));
 
 // SPA fallback
