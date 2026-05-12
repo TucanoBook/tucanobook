@@ -338,7 +338,7 @@ let bookSearch='',bookCat='';
 function renderLivros(){
   const q=bookSearch.toLowerCase(),filtered=window.state.books.filter(b=>(b.title.toLowerCase().includes(q)||b.author.toLowerCase().includes(q))&&(!bookCat||b.category===bookCat));
   document.getElementById('content').innerHTML=`
-    <div class="card" style="margin-bottom:14px"><div class="search-bar"><input class="search-input" id="book-search" placeholder="🔍 Buscar título ou autor..." oninput="bookSearch=this.value;renderLivros()" value="${bookSearch}"><select id="book-cat" onchange="bookCat=this.value;renderLivros()" style="padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'Sora',sans-serif;outline:none"><option value="">Todas categorias</option>${BCATS.map(c=>`<option ${c===bookCat?'selected':''}>${c}</option>`).join('')}</select><button class="btn" style="margin-left:auto" onclick="openBookModal()">+ Novo Livro</button></div><div style="font-size:12px;color:var(--muted)">${filtered.length} livro(s)</div></div>
+    <div class="card" style="margin-bottom:14px"><div class="search-bar"><input class="search-input" id="book-search" placeholder="🔍 Buscar título ou autor..." oninput="setBookSearch(this.value)" value="${bookSearch}"><select id="book-cat" onchange="setBookCat(this.value)" style="padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'Sora',sans-serif;outline:none"><option value="">Todas categorias</option>${BCATS.map(c=>`<option ${c===bookCat?'selected':''}>${c}</option>`).join('')}</select><button class="btn" style="margin-left:auto" onclick="openBookModal()">+ Novo Livro</button></div><div style="font-size:12px;color:var(--muted)">${filtered.length} livro(s)</div></div>
     <div class="card">${tbl([{label:'Título / Autor',render:r=>`<div><div style="font-weight:600">${r.title}</div><div style="font-size:11px;color:var(--sub)">${r.author}</div></div>`},{label:'Categoria',render:r=>`<span class="badge badge-indigo">${r.category}</span>`},{label:'Custo',render:r=>BRL(r.costPrice)},{label:'Venda',render:r=>BRL(r.salePrice)},{label:'Markup',render:r=>{const m=r.costPrice>0?((r.salePrice-r.costPrice)/r.costPrice*100):0;return`<span style="color:${m>30?'#10b981':m>10?'#f59e0b':'#ef4444'};font-weight:600">${m.toFixed(1)}%</span>`}},{label:'Margem',render:r=>{const m=r.salePrice>0?((r.salePrice-r.costPrice)/r.salePrice*100):0;return`<span style="color:${m>20?'#10b981':m>5?'#f59e0b':'#ef4444'};font-weight:600">${m.toFixed(1)}%</span>`}},{label:'Estoque',render:r=>`<span class="badge ${r.stock<=5?'badge-red':r.stock<=15?'badge-amber':'badge-green'}">${r.stock}</span>`},{label:'',render:r=>`<div style="display:flex;gap:5px"><button class="btn btn-sm" onclick='openBookModal(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✏️</button><button class="btn btn-sm btn-red" onclick="delBook('${r.id}')">🗑️</button></div>`}],filtered)}</div>`;
 }
 window.openBookModal=function(book=null){
@@ -360,6 +360,8 @@ window.delBook=function(id){if(!confirm('Excluir este livro?'))return;window.sta
 
 // ── MOVIMENTOS ───────────────────────────────────────────────────────────
 let movFilter='all',movType='saida';
+window.setMovFilter=function(f){movFilter=f;renderMovimentos();};
+window.setDespFilter=function(f){despFilter=f;renderDespesas();};
 window.renderMovimentos=function(){
   const sorted=[...window.state.movements].filter(m=>movFilter==='all'||m.type===movFilter).sort((a,b)=>new Date(b.date)-new Date(a.date));
   const supplierOpts=window.state.suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
@@ -390,7 +392,7 @@ window.renderMovimentos=function(){
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
           <span style="font-size:14px;font-weight:700">Histórico (${sorted.length})</span>
-          <div class="filter-tabs"><button class="filter-tab ${movFilter==='all'?'active':''}" onclick="movFilter='all';renderMovimentos()">Todos</button><button class="filter-tab ${movFilter==='entrada'?'active':''}" onclick="movFilter='entrada';renderMovimentos()">Entradas</button><button class="filter-tab ${movFilter==='saida'?'active':''}" onclick="movFilter='saida';renderMovimentos()">Saídas</button></div>
+          <div class="filter-tabs"><button class="filter-tab ${movFilter==='all'?'active':''}" onclick="setMovFilter('all')">Todos</button><button class="filter-tab ${movFilter==='entrada'?'active':''}" onclick="setMovFilter('entrada')">Entradas</button><button class="filter-tab ${movFilter==='saida'?'active':''}" onclick="setMovFilter('saida')">Saídas</button></div>
         </div>
         ${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Tipo',render:r=>`<span class="badge ${r.type==='entrada'?'badge-green':'badge-red'}">${r.type==='entrada'?'↑ Entrada':'↓ Saída'}</span>`},{label:'Livro',render:r=>r.bookTitle||'-'},{label:'Qtd',key:'quantity'},{label:'Unit.',render:r=>BRL(r.unitPrice)},{label:'Frete',render:r=>r.freightCost>0?BRL(r.freightCost):'-'},{label:'Total',render:r=>`<strong>${BRL(r.quantity*r.unitPrice+(r.freightCost||0))}</strong>`},{label:'Contato',render:r=>r.supplierName||r.clientName||'-'}],sorted,'Nenhuma movimentação registrada.')}
       </div>
@@ -509,10 +511,14 @@ window.confirmSellKit=function(id){const kit=window.state.kits.find(k=>k.id===id
 
 // ── CLIENTES ─────────────────────────────────────────────────────────────
 let cliSearch='';
+window.setCliSearch=function(v){cliSearch=v;renderClientes();};
+window.setBookSearch=function(v){bookSearch=v;renderLivros();};
+window.setBookCat=function(v){bookCat=v;renderLivros();};
+window.setSupSearch=function(v){supSearch=v;renderFornecedores();};
 function renderClientes(){
   const q=cliSearch.toLowerCase(),f=window.state.clients.filter(c=>c.name.toLowerCase().includes(q)||(c.email||'').toLowerCase().includes(q));
   const getTotal=id=>window.state.movements.filter(m=>m.type==='saida'&&m.clientId===id).reduce((a,m)=>a+m.quantity*m.unitPrice,0);
-  document.getElementById('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="search-bar"><input class="search-input" id="cli-search" placeholder="🔍 Buscar cliente..." oninput="cliSearch=this.value;renderClientes()" value="${cliSearch}"><button class="btn" style="margin-left:auto" onclick="openClientModal()">+ Novo Cliente</button></div><div style="font-size:12px;color:var(--muted)">${f.length} cliente(s)</div></div>
+  document.getElementById('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="search-bar"><input class="search-input" id="cli-search" placeholder="🔍 Buscar cliente..." oninput="setCliSearch(this.value)" value="${cliSearch}"><button class="btn" style="margin-left:auto" onclick="openClientModal()">+ Novo Cliente</button></div><div style="font-size:12px;color:var(--muted)">${f.length} cliente(s)</div></div>
   <div class="card">${tbl([{label:'Nome / E-mail',render:r=>`<div><div style="font-weight:600">${r.name}</div><div style="font-size:11px;color:var(--sub)">${r.email||'-'}</div></div>`},{label:'Telefone',render:r=>r.phone||'-'},{label:'Cidade',render:r=>r.city||'-'},{label:'Total Compras',render:r=>`<strong style="color:#10b981">${BRL(getTotal(r.id))}</strong>`},{label:'',render:r=>`<div style="display:flex;gap:5px"><button class="btn btn-sm btn-blue" onclick="viewClient('${r.id}')">📋</button><button class="btn btn-sm" onclick='openClientModal(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✏️</button><button class="btn btn-sm btn-red" onclick="delClient('${r.id}')">🗑️</button></div>`}],f,'Nenhum cliente cadastrado.')}</div>`;
 }
 window.openClientModal=function(c=null){openModal(c?'Editar Cliente':'Novo Cliente',`${fg('Nome *',inp('cf-name','text',c?.name||''))}<div class="grid2">${fg('E-mail',inp('cf-email','email',c?.email||''))}${fg('Telefone',inp('cf-phone','text',c?.phone||''))}</div><div class="grid2">${fg('Cidade',inp('cf-city','text',c?.city||''))}${fg('CPF/CNPJ',inp('cf-doc','text',c?.doc||''))}</div>${fg('Endereço',inp('cf-address','text',c?.address||''))}${fg('Observações',inp('cf-notes','text',c?.notes||'','Opcional'))}<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveClient('${c?.id||''}')">Salvar</button></div>`);};
@@ -524,7 +530,7 @@ window.viewClient=function(id){const c=window.state.clients.find(x=>x.id===id);c
 let supSearch='';
 function renderFornecedores(){
   const q=supSearch.toLowerCase(),f=window.state.suppliers.filter(s=>s.name.toLowerCase().includes(q));
-  document.getElementById('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="search-bar"><input class="search-input" id="sup-search" placeholder="🔍 Buscar fornecedor..." oninput="supSearch=this.value;renderFornecedores()" value="${supSearch}"><button class="btn" style="margin-left:auto" onclick="openSupModal()">+ Novo Fornecedor</button></div><div style="font-size:12px;color:var(--muted)">${f.length} fornecedor(es)</div></div>
+  document.getElementById('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="search-bar"><input class="search-input" id="sup-search" placeholder="🔍 Buscar fornecedor..." oninput="setSupSearch(this.value)" value="${supSearch}"><button class="btn" style="margin-left:auto" onclick="openSupModal()">+ Novo Fornecedor</button></div><div style="font-size:12px;color:var(--muted)">${f.length} fornecedor(es)</div></div>
   <div class="card">${tbl([{label:'Nome / CNPJ',render:r=>`<div><div style="font-weight:600">${r.name}</div><div style="font-size:11px;color:var(--sub)">${r.cnpj||'-'}</div></div>`},{label:'Telefone',render:r=>r.phone||'-'},{label:'E-mail',render:r=>r.email||'-'},{label:'Cidade',render:r=>r.city||'-'},{label:'',render:r=>`<div style="display:flex;gap:5px"><button class="btn btn-sm" onclick='openSupModal(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✏️</button><button class="btn btn-sm btn-red" onclick="delSup('${r.id}')">🗑️</button></div>`}],f,'Nenhum fornecedor cadastrado.')}</div>`;
 }
 window.openSupModal=function(s=null){openModal(s?'Editar Fornecedor':'Novo Fornecedor',`${fg('Nome / Razão Social *',inp('sf-name','text',s?.name||''))}<div class="grid2">${fg('CNPJ',inp('sf-cnpj','text',s?.cnpj||''))}${fg('Telefone',inp('sf-phone','text',s?.phone||''))}</div><div class="grid2">${fg('E-mail',inp('sf-email','email',s?.email||''))}${fg('Cidade',inp('sf-city','text',s?.city||''))}</div>${fg('Observações',inp('sf-notes','text',s?.notes||'','Opcional'))}<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveSup('${s?.id||''}')">Salvar</button></div>`);};
@@ -556,8 +562,8 @@ function renderDespesas(){
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
           <span style="font-size:14px;font-weight:700">Histórico (${filtered.length})</span>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="filter-tab ${despFilter==='all'?'active':''}" onclick="despFilter='all';renderDespesas()">Todas</button>
-            ${cats.map(c=>`<button class="filter-tab ${despFilter===c?'active':''}" onclick="despFilter='${c}';renderDespesas()">${c}</button>`).join('')}
+            <button class="filter-tab ${despFilter==='all'?'active':''}" onclick="setDespFilter('all')">Todas</button>
+            ${cats.map(c=>`<button class="filter-tab ${despFilter===c?'active':''}" onclick="setDespFilter('${c}')">${c}</button>`).join('')}
           </div>
         </div>
         ${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Categoria',render:r=>`<span class="badge badge-indigo">${r.category||'-'}</span>`},{label:'Descrição',key:'description'},{label:'Valor',render:r=>`<strong style="color:#ef4444">${BRL(r.amount)}</strong>`},{label:'',render:r=>`<button class="btn btn-sm btn-red" onclick="delDespesa('${r.id}')">🗑️</button>`}],filtered,'Nenhuma despesa registrada.')}
@@ -609,6 +615,7 @@ function renderRelatorios(){
 
 // ── CONFIG ───────────────────────────────────────────────────────────────
 let configTab='usuarios';
+window.setConfigTab=function(tab){configTab=tab;renderConfig();};
 async function renderConfig(){
   const uname=currentUser?.displayName||currentUser?.email||'Usuário';
   let html=`
@@ -618,7 +625,7 @@ async function renderConfig(){
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><span style="background:rgba(255,255,255,.2);padding:3px 12px;border-radius:20px;font-size:12px;font-weight:600">✅ Conta ativa</span><button class="btn btn-sm" style="background:rgba(255,255,255,.2);border:none;color:#fff" onclick="openResetOwnPw()">🔑 Trocar senha</button></div>
       </div>
     </div>
-    <div class="sub-tabs"><button class="sub-tab ${configTab==='usuarios'?'active':''}" onclick="configTab='usuarios';renderConfig()">👥 Usuários</button><button class="sub-tab ${configTab==='categorias'?'active':''}" onclick="configTab='categorias';renderConfig()">🏷️ Categorias</button><button class="sub-tab ${configTab==='dados'?'active':''}" onclick="configTab='dados';renderConfig()">💾 Dados</button></div>`;
+    <div class="sub-tabs"><button class="sub-tab ${configTab==='usuarios'?'active':''}" onclick="setConfigTab('usuarios')">👥 Usuários</button><button class="sub-tab ${configTab==='categorias'?'active':''}" onclick="setConfigTab('categorias')">🏷️ Categorias</button><button class="sub-tab ${configTab==='dados'?'active':''}" onclick="setConfigTab('dados')">💾 Dados</button></div>`;
 
   if(configTab==='usuarios'){
     let users=[];try{const snap=await getDocs(collection(db,'users'));snap.forEach(d=>users.push(d.data()));users.sort((a,b)=>(a.name||'').localeCompare(b.name||''));}catch{}
