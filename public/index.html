@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="theme-color" content="#0f172a"><title>LivroGest</title>
+<meta name="theme-color" content="#0f172a"><title>TucanoBook — Gestão</title>
 <link rel="manifest" href="/manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -119,8 +119,8 @@ tr:hover td{background:#fafbff}.empty-row td{text-align:center;color:var(--muted
 @media(max-width:768px){
   .hamburger{display:flex}
   .app{flex-direction:column}
-  .sidebar{position:fixed;left:-240px;top:0;bottom:0;width:240px;z-index:199;transition:left .28s cubic-bezier(.4,0,.2,1);box-shadow:4px 0 24px rgba(0,0,0,.3)}
-  .sidebar.open{left:0}
+  .sidebar{position:fixed;left:0;top:0;bottom:0;width:240px;z-index:199;-webkit-transform:translateX(-240px);transform:translateX(-240px);-webkit-transition:-webkit-transform .28s cubic-bezier(.4,0,.2,1);transition:transform .28s cubic-bezier(.4,0,.2,1);box-shadow:4px 0 24px rgba(0,0,0,.3)}
+  .sidebar.open{-webkit-transform:translateX(0);transform:translateX(0)}
   .main{width:100%;min-width:0}
   .topbar{padding:10px 14px}
   .topbar h2{font-size:15px}.topbar p{font-size:11px}
@@ -170,11 +170,11 @@ tr:hover td{background:#fafbff}.empty-row td{text-align:center;color:var(--muted
 </style>
 </head>
 <body>
-<div id="loading-screen"><div style="font-size:44px">📖</div><h2>LivroGest</h2><div class="spinner"></div><p id="loading-msg">Conectando...</p></div>
+<div id="loading-screen"><div style="font-size:44px">📖</div><h2>TucanoBook</h2><div class="spinner"></div><p id="loading-msg">Conectando...</p></div>
 
 <div id="auth-screen">
   <div class="auth-card">
-    <div class="auth-logo"><span>📖</span><h1>LivroGest</h1><p>Sistema de gestão de livraria</p></div>
+    <div class="auth-logo"><span>📖</span><h1>TucanoBook</h1><p>Sistema de gestão de livraria</p></div>
     <div class="auth-tabs" id="auth-tabs">
       <button class="auth-tab active" onclick="switchAuthTab('login')">Entrar</button>
       <button class="auth-tab" onclick="switchAuthTab('register')">Cadastrar</button>
@@ -210,7 +210,7 @@ tr:hover td{background:#fafbff}.empty-row td{text-align:center;color:var(--muted
 <div class="mob-overlay" id="mob-overlay" onclick="closeSidebar()"></div>
 <div class="app" id="app" style="display:none">
   <div class="sidebar">
-    <div class="sb-logo"><h1>📖 LivroGest</h1><small>Gestão de livraria</small></div>
+    <div class="sb-logo"><h1>🦜 TucanoBook</h1><small>Gestão TucanoBook</small></div>
     <nav class="sb-nav" id="nav"></nav>
     <div class="sb-user">
       <div class="sb-user-row">
@@ -274,7 +274,7 @@ window.doLogout=async function(){if(confirm('Sair da sua conta?'))await signOut(
 document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;if(document.getElementById('form-login').classList.contains('active'))doLogin();if(document.getElementById('form-register').classList.contains('active'))doRegister();if(document.getElementById('form-reset').classList.contains('active'))doReset();});
 
 // ── STATE ────────────────────────────────────────────────────────────────
-const COLL='livrogest';
+const COLL='tucanobook';
 const BOOKS0=[
   {id:'b1',title:'O Pequeno Príncipe',author:'Antoine de Saint-Exupéry',isbn:'978-85-359-0277-1',category:'Literatura',costPrice:12,salePrice:25,stock:50},
   {id:'b2',title:'Dom Casmurro',author:'Machado de Assis',isbn:'978-85-7638-820-6',category:'Clássicos',costPrice:8,salePrice:18,stock:30},
@@ -414,14 +414,25 @@ function renderDashboard(){
   const recent=[...S.movements].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
   const lbl=[],rv=[],ex=[];
   for(let i=5;i>=0;i--){const d=new Date(yr,mo-i,1);lbl.push(d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''));const m2=d.getMonth(),y2=d.getFullYear();rv.push(+S.movements.filter(mv=>mv.type==='saida'&&new Date(mv.date).getMonth()===m2&&new Date(mv.date).getFullYear()===y2).reduce((a,mv)=>a+mv.quantity*mv.unitPrice,0).toFixed(2));ex.push(+S.expenses.filter(e=>new Date(e.date).getMonth()===m2&&new Date(e.date).getFullYear()===y2).reduce((a,e)=>a+parseCur(e.amount),0).toFixed(2));}
+  // Apply search + filter
+  let filteredKits=[...window.state.kits];
+  const kSalesCount=kit=>window.state.movements.filter(m=>m.type==='saida'&&m.bookId===`kit-${kit.id}`).reduce((a,m)=>a+m.quantity,0);
+  const kProfit=kit=>{const cost=kCost(kit);return(parseCur(kit.salePrice)-cost)*kSalesCount(kit);};
+  if(_kitSearch){const q=_kitSearch.toLowerCase();filteredKits=filteredKits.filter(k=>k.name.toLowerCase().includes(q));}
+  if(_kitFilter==='mais_vendidos')filteredKits.sort((a,b)=>kSalesCount(b)-kSalesCount(a));
+  else if(_kitFilter==='mais_lucro')filteredKits.sort((a,b)=>kProfit(b)-kProfit(a));
+  else if(_kitFilter==='menos_vendidos')filteredKits.sort((a,b)=>kSalesCount(a)-kSalesCount(b));
+  else if(_kitFilter==='estoque')filteredKits=filteredKits.filter(k=>(k.stock||0)>0);
+  else if(_kitFilter==='sem_estoque')filteredKits=filteredKits.filter(k=>!(k.stock||0));
+  const kitsToShow=filteredKits;
   document.getElementById('content').innerHTML=`
-    <div class="grid4" style="margin-bottom:16px">${statCard('📚','Livros em Estoque',tot,'#6366f1',BRL(val)+' em valor')}${statCard('👥','Clientes',S.clients.length,'#3b82f6','')}${statCard('📈','Receita do Mês',BRL(mRev),'#10b981','')}${statCard('💸','Despesas do Mês',BRL(mExp),'#f59e0b','')}</div>
+    <div class="grid4" style="margin-bottom:16px">${statCard('📚','Livros em Estoque',tot,'#6366f1',BRL(val)+' em valor')}${statCard('👥','Clientes',S.clients.length,'#3b82f6','')}${statCard('📈','Receita do Mês',BRL(mRev),'#10b981','')}${statCard('💸','Despesas do Mês',BRL(mExp),'#f59e0b','#f59e0b','')}</div>
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px">
       <div class="card"><div style="font-size:13px;font-weight:600;margin-bottom:14px">📊 Receita vs Despesas — 6 meses</div><div class="chart-wrap"><canvas id="dash-chart"></canvas></div></div>
       <div class="card"><div style="font-size:13px;font-weight:600;margin-bottom:12px">⚠️ Estoque Crítico</div>${low.length===0?'<div style="color:var(--muted);font-size:13px;padding:16px 0;text-align:center">✅ Todos os livros OK!</div>':low.map(b=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div style="font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.title}</div><span class="badge badge-red" style="margin-left:8px">${b.stock}</span></div>`).join('')}</div>
     </div>
     <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:13px;font-weight:600">🔄 Últimas Movimentações</span><button class="btn btn-sm" onclick="goto('movimentos')">Ver todas</button></div>
-      ${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Tipo',render:r=>`<span class="badge ${r.type==='entrada'?'badge-green':'badge-red'}">${r.type==='entrada'?'↑ Entrada':'↓ Saída'}</span>`},{label:'Livro',render:r=>r.bookTitle||'-'},{label:'Qtd',key:'quantity'},{label:'Total',render:r=>`<strong>${BRL(r.quantity*r.unitPrice)}</strong>`},{label:'Contato',render:r=>r.supplierName||r.clientName||'-'}],recent,'Nenhuma movimentação ainda.')}
+      ${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Tipo',render:r=>`<span class="badge ${r.type==='entrada'?'badge-green':r.type==='brinde'?'badge-purple':'badge-red'}">${r.type==='entrada'?'↑ Entrada':r.type==='brinde'?'🎁 Brinde':'↓ Saída'}</span>`},{label:'Livro',render:r=>r.bookTitle||'-'},{label:'Qtd',key:'quantity'},{label:'Total',render:r=>`<strong>${BRL(r.quantity*r.unitPrice)}</strong>`},{label:'Contato',render:r=>r.supplierName||r.clientName||'-'}],recent,'Nenhuma movimentação ainda.')}
     </div>`;
   setTimeout(()=>{const el=document.getElementById('dash-chart');if(!el)return;charts['dash']=new Chart(el,{type:'bar',data:{labels:lbl,datasets:[{label:'Receita',data:rv,backgroundColor:'#10b981',borderRadius:4,barThickness:14},{label:'Despesas',data:ex,backgroundColor:'#f59e0b',borderRadius:4,barThickness:14}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:'Sora'},boxWidth:12}}},scales:{x:{grid:{display:false},ticks:{font:{family:'Sora',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Sora',size:11},callback:v=>'R$'+v}}}}});},50);
 }
@@ -467,6 +478,9 @@ window.renderMovimentos=function(){
           <button id="tb-saida" class="type-btn" style="border:2px solid #ef4444;background:#fee2e2;color:#dc2626" onclick="setMovType('saida')">↓ Saída (Venda)</button>
           <button id="tb-entrada" class="type-btn" style="border:2px solid var(--border);background:#fff;color:var(--sub)" onclick="setMovType('entrada')">↑ Entrada (Compra)</button>
         </div></div>
+        <div class="type-toggle" style="grid-template-columns:1fr 1fr 1fr">
+          <button id="tb-brinde" class="type-btn" style="border:2px solid var(--border);background:#fff;color:var(--sub)" onclick="setMovType('brinde')">🎁 Brinde/UGC</button>
+        </div>
         <input type="hidden" id="mov-type" value="saida">
         <div class="fg"><label>Livro *</label><select id="mov-book" onchange="autoMovPrice()" style="width:100%"><option value="">Selecione...</option>${window.state.books.map(b=>`<option value="${b.id}">${b.title} (est: ${b.stock})</option>`).join('')}</select></div>
         <div class="grid2">${fg('Quantidade *',inp('mov-qty','number','','1'))}${fg('Preço Unit. (R$) *',cinp('mov-price',0))}</div>
@@ -494,7 +508,7 @@ window.renderMovimentos=function(){
           <span style="font-size:14px;font-weight:700">Histórico (${sorted.length})</span>
           <div class="filter-tabs"><button class="filter-tab ${movFilter==='all'?'active':''}" onclick="setMovFilter('all')">Todos</button><button class="filter-tab ${movFilter==='entrada'?'active':''}" onclick="setMovFilter('entrada')">Entradas</button><button class="filter-tab ${movFilter==='saida'?'active':''}" onclick="setMovFilter('saida')">Saídas</button></div>
         </div>
-        ${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Tipo',render:r=>`<span class="badge ${r.type==='entrada'?'badge-green':'badge-red'}">${r.type==='entrada'?'↑ Entrada':'↓ Saída'}</span>`},{label:'Livro',render:r=>r.bookTitle||'-'},{label:'Qtd',key:'quantity'},{label:'Unit.',render:r=>BRL(r.unitPrice)},{label:'Frete',render:r=>r.freightCost>0?BRL(r.freightCost):'-'},{label:'Total',render:r=>`<strong>${BRL(r.quantity*r.unitPrice+(r.freightCost||0))}</strong>`},{label:'Contato',render:r=>r.supplierName||r.clientName||'-'}],sorted,'Nenhuma movimentação registrada.')}
+        ${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Tipo',render:r=>`<span class="badge ${r.type==='entrada'?'badge-green':r.type==='brinde'?'badge-purple':'badge-red'}">${r.type==='entrada'?'↑ Entrada':r.type==='brinde'?'🎁 Brinde':'↓ Saída'}</span>`},{label:'Livro',render:r=>r.bookTitle||'-'},{label:'Qtd',key:'quantity'},{label:'Unit.',render:r=>BRL(r.unitPrice)},{label:'Frete',render:r=>r.freightCost>0?BRL(r.freightCost):'-'},{label:'Total',render:r=>`<strong>${BRL(r.quantity*r.unitPrice+(r.freightCost||0))}</strong>`},{label:'Contato',render:r=>r.supplierName||r.clientName||'-'}],sorted,'Nenhuma movimentação registrada.')}
       </div>
     </div>`;
   initCurrency('.cur');
@@ -514,8 +528,8 @@ window.saveMov=function(){
   const qty=parseInt(document.getElementById('mov-qty').value)||0,price=parseCur(document.getElementById('mov-price').value);
   if(!bookId||!qty||!price)return alert('Preencha livro, quantidade e preço.');
   const book=window.state.books.find(b=>b.id===bookId);
-  if(type==='saida'&&book.stock<qty)return alert(`Estoque insuficiente! Disponível: ${book.stock}`);
-  const freightCost=parseCur(document.getElementById('mov-frete')?.value)||0;
+  if((type==='saida'||type==='brinde')&&book.stock<qty)return alert(`Estoque insuficiente! Disponível: ${book.stock}`);
+  const freightImport=parseCur(document.getElementById('mov-frete-import')?.value)||0;const freightBR=parseCur(document.getElementById('mov-frete-br')?.value)||0;const freightCost=freightImport+freightBR;
   const supplierId=document.getElementById('mov-supplier')?.value||'';
   const supplier=supplierId?window.state.suppliers.find(s=>s.id===supplierId):null;
   const clientId=document.getElementById('mov-client')?.value||'';
@@ -524,19 +538,40 @@ window.saveMov=function(){
   const discPct=parseFloat(document.getElementById('mov-disc')?.value)||0;
   const shopifyFee=parseCur(document.getElementById('mov-shopify')?.value)||0;
   const netPrice=discPct>0?price*(1-discPct/100):price;
-  window.state.movements.push({id:genId(),type,bookId,bookTitle:book.title,quantity:qty,unitPrice:netPrice,grossUnitPrice:price,freightCost,supplierId,supplierName:supplier?.name||'',clientId,clientName:client?.name||'',ugcCode,discountPct:discPct,shopifyFee,date:document.getElementById('mov-date').value,notes:document.getElementById('mov-notes').value});
-  window.state.books=window.state.books.map(b=>b.id===bookId?{...b,stock:b.stock+(type==='entrada'?qty:-qty)}:b);
+  window.state.movements.push({id:genId(),type,bookId,bookTitle:book.title,quantity:qty,unitPrice:netPrice,grossUnitPrice:price,freightCost,freightImport,freightBR,supplierId,supplierName:supplier?.name||'',clientId,clientName:client?.name||'',ugcCode,discountPct:discPct,shopifyFee,date:document.getElementById('mov-date').value,notes:document.getElementById('mov-notes').value});
+  window.state.books=window.state.books.map(b=>b.id===bookId?{...b,stock:b.stock+(type==='entrada'?qty:-qty)}:b); // brinde also deducts
   saveState('movements');saveState('books');toast(type==='entrada'?'Entrada registrada!':'Saída registrada!');renderMovimentos();
 };
 
 // ── KITS ─────────────────────────────────────────────────────────────────
 window._kitItems=[];
+let _kitSearch='', _kitFilter='todos';
+window.setKitSearch=function(v){_kitSearch=v;renderKits();};
+window.setKitFilter=function(f){
+  _kitFilter=f;
+  document.querySelectorAll('#kit-filter-tabs .filter-tab').forEach((btn,i)=>{
+    const filters=['todos','mais_vendidos','mais_lucro','menos_vendidos','estoque','sem_estoque'];
+    btn.classList.toggle('active',filters[i]===f);
+  });
+  renderKits();
+};
 window.renderKits=function(){
   const kCost=kit=>kit.items.reduce((a,i)=>{const b=window.state.books.find(bk=>bk.id===i.bookId);return a+(b?b.costPrice*i.quantity:0);},0);
   document.getElementById('content').innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div style="font-size:13px;color:var(--sub)">Monte kits e gerencie estoque de kits prontos.</div><button class="btn" onclick="openKitModal()">+ Montar Kit</button></div>
-    ${window.state.kits.length===0?`<div class="card" style="text-align:center;padding:52px"><div style="font-size:44px;margin-bottom:10px">🎁</div><div style="font-size:15px;font-weight:600">Nenhum kit montado</div><div style="font-size:13px;color:var(--sub);margin-top:6px">Ao montar um kit, o estoque dos livros é descontado.</div></div>`:
-    `<div class="kit-grid">${window.state.kits.map(kit=>{
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <input class="search-input" id="kit-search" placeholder="🔍 Buscar kit..." oninput="setKitSearch(this.value)" style="max-width:240px">
+      <div class="filter-tabs" id="kit-filter-tabs">
+        <button class="filter-tab active" onclick="setKitFilter('todos')">Todos</button>
+        <button class="filter-tab" onclick="setKitFilter('mais_vendidos')">+ Vendidos</button>
+        <button class="filter-tab" onclick="setKitFilter('mais_lucro')">+ Rentáveis</button>
+        <button class="filter-tab" onclick="setKitFilter('menos_vendidos')">− Vendidos</button>
+        <button class="filter-tab" onclick="setKitFilter('estoque')">Com Estoque</button>
+        <button class="filter-tab" onclick="setKitFilter('sem_estoque')">Sem Estoque</button>
+      </div>
+      <button class="btn" style="margin-left:auto" onclick="openKitModal()">+ Montar Kit</button>
+    </div>
+    ${kitsToShow.length===0?`<div class="card" style="text-align:center;padding:52px"><div style="font-size:44px;margin-bottom:10px">🎁</div><div style="font-size:15px;font-weight:600">Nenhum kit montado</div><div style="font-size:13px;color:var(--sub);margin-top:6px">Ao montar um kit, o estoque dos livros é descontado.</div></div>`:
+    `<div class="kit-grid">${kitsToShow.map(kit=>{
       const cost=kCost(kit),margin=parseCur(kit.salePrice)>0?((parseCur(kit.salePrice)-cost)/cost*100):0;
       return`<div class="kit-card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><div style="font-size:15px;font-weight:700">🎁 ${kit.name}</div><span class="badge badge-green">${BRL(kit.salePrice)}</span></div>
@@ -783,7 +818,7 @@ async function renderConfig(){
 
 window.addCategory=function(){const v=document.getElementById('new-cat-inp')?.value?.trim();if(!v||window.state.expenseCategories.includes(v))return;window.state.expenseCategories.push(v);saveState('expenseCategories');renderConfig();toast('Categoria adicionada!');};
 window.removeCategory=function(i){if(!confirm('Remover categoria?'))return;window.state.expenseCategories.splice(i,1);saveState('expenseCategories');renderConfig();};
-window.downloadBackup=function(){const data=JSON.stringify(window.state,null,2);const blob=new Blob([data],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`livrogest-backup-${today()}.json`;a.click();URL.revokeObjectURL(url);toast('Backup baixado!');};
+window.downloadBackup=function(){const data=JSON.stringify(window.state,null,2);const blob=new Blob([data],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`tucanobook-backup-${today()}-${new Date().toTimeString().slice(0,8).replace(/:/g,'h')}.json`;a.click();URL.revokeObjectURL(url);toast('Backup baixado!');};
 window.restoreBackup=async function(input){
   const file=input.files[0];if(!file)return;
   const el=document.getElementById('restore-status');
