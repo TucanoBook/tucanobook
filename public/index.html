@@ -110,6 +110,63 @@ tr:hover td{background:#fafbff}.empty-row td{text-align:center;color:var(--muted
 .stock-bar{height:4px;background:#e2e8f0;border-radius:2px;margin-top:8px}
 .stock-bar-fill{height:100%;border-radius:2px;background:#10b981;transition:width .3s}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+
+/* ── MOBILE RESPONSIVE ───────────────────────────────── */
+.hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:6px;background:none;border:none;z-index:201}
+.hamburger span{display:block;width:22px;height:2px;background:#374151;border-radius:2px;transition:all .3s}
+.mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:198}
+.mob-overlay.show{display:block}
+@media(max-width:768px){
+  .hamburger{display:flex}
+  .app{flex-direction:column}
+  .sidebar{position:fixed;left:-240px;top:0;bottom:0;width:240px;z-index:199;transition:left .28s cubic-bezier(.4,0,.2,1);box-shadow:4px 0 24px rgba(0,0,0,.3)}
+  .sidebar.open{left:0}
+  .main{width:100%;min-width:0}
+  .topbar{padding:10px 14px}
+  .topbar h2{font-size:15px}.topbar p{font-size:11px}
+  .content{padding:12px 10px}
+  .grid4{grid-template-columns:1fr 1fr !important}
+  .grid3{grid-template-columns:1fr 1fr !important}
+  .grid2{grid-template-columns:1fr !important}
+  .stat-value{font-size:18px !important}
+  .stat-card,.card{padding:14px 12px}
+  /* Dashboard 2-col → 1-col */
+  div[style*="grid-template-columns:2fr 1fr"]{display:block !important}
+  div[style*="grid-template-columns:2fr 1fr"] > *{margin-bottom:12px}
+  div[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr !important;display:grid !important}
+  div[style*="grid-template-columns:330px"]{display:block !important}
+  div[style*="grid-template-columns:330px"] > *{margin-bottom:12px}
+  div[style*="grid-template-columns:340px"]{display:block !important}
+  div[style*="grid-template-columns:340px"] > *{margin-bottom:12px}
+  div[style*="grid-template-columns:300px"]{display:block !important}
+  div[style*="grid-template-columns:300px"] > *{margin-bottom:12px}
+  div[style*="grid-template-columns:repeat(auto-fill"]{grid-template-columns:1fr !important}
+  /* Tables scroll */
+  div[style*="overflow-x:auto"]{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{min-width:540px}
+  /* Topbar */
+  .topbar{gap:8px}
+  #top-date{display:none}
+  /* Kit grid */
+  .kit-grid{grid-template-columns:1fr !important}
+  /* Filter tabs wrap */
+  .filter-tabs{flex-wrap:wrap}
+  /* Auth card */
+  .auth-card{padding:24px 18px}
+  /* Modal */
+  .modal,.modal-lg{max-width:100% !important;margin:0;border-radius:12px}
+  .overlay{align-items:flex-end;padding:0}
+  .modal,.modal-lg{border-radius:16px 16px 0 0;max-height:85vh}
+  /* User hero */
+  .user-hero{flex-direction:column;text-align:center;gap:10px}
+  /* Sub tabs */
+  .sub-tabs{width:100% !important;display:grid;grid-template-columns:1fr 1fr 1fr}
+  .sub-tab{padding:8px 4px;font-size:12px}
+}
+@media(max-width:400px){
+  .grid4{grid-template-columns:1fr !important}
+  .stat-value{font-size:16px !important}
+}
 </style>
 </head>
 <body>
@@ -150,6 +207,7 @@ tr:hover td{background:#fafbff}.empty-row td{text-align:center;color:var(--muted
 
 <div class="toast" id="toast"></div>
 
+<div class="mob-overlay" id="mob-overlay" onclick="closeSidebar()"></div>
 <div class="app" id="app" style="display:none">
   <div class="sidebar">
     <div class="sb-logo"><h1>📖 LivroGest</h1><small>Gestão de livraria</small></div>
@@ -164,6 +222,7 @@ tr:hover td{background:#fafbff}.empty-row td{text-align:center;color:var(--muted
   </div>
   <div class="main">
     <div class="topbar">
+      <button class="hamburger" onclick="toggleSidebar()" id="hamburger-btn"><span></span><span></span><span></span></button>
       <div><h2 id="page-title">Dashboard</h2><p id="page-sub">Visão geral do negócio</p></div>
       <div style="display:flex;align-items:center;gap:12px">
         <div style="font-size:12px;color:var(--sub)" id="top-date"></div>
@@ -728,6 +787,25 @@ initFirebase().then(()=>{
     }
   });
 }).catch(err=>{setLoadMsg('❌ '+err.message);document.querySelector('.spinner').style.display='none';});
+
+// ── MOBILE SIDEBAR ──────────────────────────────────────
+window.toggleSidebar=function(){
+  const sb=document.querySelector('.sidebar');
+  const ov=document.getElementById('mob-overlay');
+  const isOpen=sb.classList.contains('open');
+  if(isOpen){sb.classList.remove('open');ov.classList.remove('show');}
+  else{sb.classList.add('open');ov.classList.add('show');}
+};
+window.closeSidebar=function(){
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('mob-overlay').classList.remove('show');
+};
+// Auto-close sidebar on nav click (mobile)
+const _origGoto=window.goto;
+window.goto=function(page){
+  closeSidebar();
+  _origGoto(page);
+};
 </script>
 </body>
 </html>
