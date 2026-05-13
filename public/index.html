@@ -242,7 +242,7 @@ tr:hover td{background:#fafbff}.empty-row td{text-align:center;color:var(--muted
 
 <script type="module">
 import{initializeApp}from'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import{getFirestore,doc,getDoc,setDoc,getDocs,collection,updateDoc,onSnapshot,enableIndexedDbPersistence}from'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import{getFirestore,doc,getDoc,setDoc,getDocs,collection,updateDoc,onSnapshot}from'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import{getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged,sendPasswordResetEmail,updateProfile}from'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
 let db,auth,currentUser=null;
@@ -282,14 +282,14 @@ const BOOKS0=[
   {id:'b4',title:'O Alquimista',author:'Paulo Coelho',isbn:'978-85-260-0408-5',category:'Literatura',costPrice:14,salePrice:29,stock:40},
   {id:'b5',title:'Sapiens',author:'Yuval Noah Harari',isbn:'978-85-254-3526-0',category:'Não-ficção',costPrice:22,salePrice:45,stock:25},
 ];
-window.state={books:[],clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Marketing','Embalagem','Transporte','Frete','Material','Outros']};
+window.state={books:[],clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}]};
 
 let _rtListeners=[];
 function stopListeners(){_rtListeners.forEach(u=>u());_rtListeners=[];}
 
 async function loadState(){
   setLoadMsg('Carregando dados...');
-  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Marketing','Embalagem','Transporte','Frete','Material','Outros']};
+  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}]};
   // First load: get current data
   await Promise.all(Object.keys(defs).map(async key=>{
     try{const s=await getDoc(doc(db,COLL,key));window.state[key]=s.exists()?s.data().items:defs[key];}
@@ -299,7 +299,7 @@ async function loadState(){
 
 function setupRealtime(){
   stopListeners();
-  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Marketing','Embalagem','Transporte','Frete','Material','Outros']};
+  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}]};
   let _firstLoad={};
   Object.keys(defs).forEach(key=>{
     _firstLoad[key]=true;
@@ -331,7 +331,7 @@ function setLoadMsg(m){document.getElementById('loading-msg').textContent=m;}
 
 // ── HELPERS ──────────────────────────────────────────────────────────────
 const genId=()=>`${Date.now()}-${Math.floor(Math.random()*99999)}`;
-const BRL=n=>`R$ ${Number(n||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.')}`;
+const BRL=n=>`$ ${Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',')}`;const BRL_LABEL='USD ($)';
 const fmtD=d=>d?new Date(d+'T00:00:00').toLocaleDateString('pt-BR'):'-';
 const today=()=>new Date().toISOString().slice(0,10);
 const BCATS=['Literatura','Clássicos','Ficção Científica','Romance','Autoajuda','Negócios','Infantil','Não-ficção','HQ','Outros'];
@@ -379,6 +379,7 @@ const PAGES={
   fornecedores:{icon:'🏭',label:'Fornecedores',section:'Comercial',sub:'Cadastro de fornecedores'},
   despesas:{icon:'💸',label:'Despesas',section:'Financeiro',sub:'Controle de gastos'},
   relatorios:{icon:'📈',label:'Relatórios',section:'Financeiro',sub:'Análises e indicadores'},
+  ugc:{icon:'🎯',label:'Criadores UGC',section:'Marketing',sub:'Influencers e códigos de desconto'},
   config:{icon:'⚙️',label:'Configurações',section:'Sistema',sub:'Usuários, categorias e dados'},
 };
 const SECTIONS={Principal:['dashboard'],Estoque:['livros','movimentos','kits'],Comercial:['clientes','fornecedores'],Financeiro:['despesas','relatorios'],Sistema:['config']};
@@ -477,6 +478,13 @@ window.renderMovimentos=function(){
           ${fg('Custo de Frete (R$)',cinp('mov-frete',0))}
         </div>
         ${fg('Data',inp('mov-date','date',today()))}
+        <div id="mov-ugc-wrap">
+          <div class="grid3">
+            ${fg('Código UGC',inp('mov-ugc','text','','Ex: RAY10'))}
+            ${fg('Desconto %',inp('mov-disc','number','0','0'))}
+            ${fg('Taxa Shopify ($)',cinp('mov-shopify',0))}
+          </div>
+        </div>
         ${fg('Observações',inp('mov-notes','text','','Opcional'))}
         <div id="mov-total" style="display:none" class="alert alert-green"></div>
         <button class="btn" style="width:100%;justify-content:center" onclick="saveMov()">✅ Registrar</button>
@@ -512,7 +520,11 @@ window.saveMov=function(){
   const supplier=supplierId?window.state.suppliers.find(s=>s.id===supplierId):null;
   const clientId=document.getElementById('mov-client')?.value||'';
   const client=clientId?window.state.clients.find(c=>c.id===clientId):null;
-  window.state.movements.push({id:genId(),type,bookId,bookTitle:book.title,quantity:qty,unitPrice:price,freightCost,supplierId,supplierName:supplier?.name||'',clientId,clientName:client?.name||'',date:document.getElementById('mov-date').value,notes:document.getElementById('mov-notes').value});
+  const ugcCode=document.getElementById('mov-ugc')?.value||'';
+  const discPct=parseFloat(document.getElementById('mov-disc')?.value)||0;
+  const shopifyFee=parseCur(document.getElementById('mov-shopify')?.value)||0;
+  const netPrice=discPct>0?price*(1-discPct/100):price;
+  window.state.movements.push({id:genId(),type,bookId,bookTitle:book.title,quantity:qty,unitPrice:netPrice,grossUnitPrice:price,freightCost,supplierId,supplierName:supplier?.name||'',clientId,clientName:client?.name||'',ugcCode,discountPct:discPct,shopifyFee,date:document.getElementById('mov-date').value,notes:document.getElementById('mov-notes').value});
   window.state.books=window.state.books.map(b=>b.id===bookId?{...b,stock:b.stock+(type==='entrada'?qty:-qty)}:b);
   saveState('movements');saveState('books');toast(type==='entrada'?'Entrada registrada!':'Saída registrada!');renderMovimentos();
 };
@@ -647,6 +659,7 @@ function renderDespesas(){
         <div class="fg"><label>Categoria *</label><select id="gt-cat" style="width:100%"><option value="">Selecione...</option>${cats.map(c=>`<option>${c}</option>`).join('')}</select></div>
         ${fg('Descrição *',inp('gt-desc','text','','Ex: Anúncio Instagram'))}
         <div class="grid2">${fg('Valor (R$) *',cinp('gt-amount',0))}${fg('Data',inp('gt-date','date',today()))}</div>
+        <div class="fg"><label>Pago por</label><select id="gt-paidby" style="width:100%"><option value="">Não especificado</option>${window.state.partners.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
         ${fg('Observações',inp('gt-notes','text','','Opcional'))}
         <button class="btn" style="width:100%;justify-content:center" onclick="saveDespesa()">Registrar Despesa</button>
       </div>
@@ -658,12 +671,12 @@ function renderDespesas(){
             ${cats.map(c=>`<button class="filter-tab ${despFilter===c?'active':''}" onclick="setDespFilter('${c}')">${c}</button>`).join('')}
           </div>
         </div>
-        ${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Categoria',render:r=>`<span class="badge badge-indigo">${r.category||'-'}</span>`},{label:'Descrição',key:'description'},{label:'Valor',render:r=>`<strong style="color:#ef4444">${BRL(r.amount)}</strong>`},{label:'',render:r=>`<button class="btn btn-sm btn-red" onclick="delDespesa('${r.id}')">🗑️</button>`}],filtered,'Nenhuma despesa registrada.')}
+        ${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Categoria',render:r=>`<span class="badge badge-indigo">${r.category||'-'}</span>`},{label:'Descrição',key:'description'},{label:'Valor',render:r=>`<strong style="color:#ef4444">${BRL(r.amount)}</strong>`},{label:'Pago por',render:r=>{const p=window.state.partners.find(x=>x.id===r.paidBy);return p?`<span class="badge badge-indigo">${p.name}</span>`:'<span style="color:var(--muted)">—</span>';}},{label:'',render:r=>`<button class="btn btn-sm btn-red" onclick="delDespesa('${r.id}')">🗑️</button>`}],filtered,'Nenhuma despesa registrada.')}
       </div>
     </div>`;
   initCurrency('.cur');
 }
-window.saveDespesa=function(){const d={category:document.getElementById('gt-cat').value,description:document.getElementById('gt-desc').value.trim(),amount:parseCur(document.getElementById('gt-amount').value),date:document.getElementById('gt-date').value,notes:document.getElementById('gt-notes').value};if(!d.category||!d.description||!d.amount)return alert('Preencha categoria, descrição e valor.');window.state.expenses.push({...d,id:genId()});saveState('expenses');renderDespesas();toast('Despesa registrada!');};
+window.saveDespesa=function(){const d={category:document.getElementById('gt-cat').value,description:document.getElementById('gt-desc').value.trim(),amount:parseCur(document.getElementById('gt-amount').value),date:document.getElementById('gt-date').value,paidBy:document.getElementById('gt-paidby')?.value||'',notes:document.getElementById('gt-notes').value};if(!d.category||!d.description||!d.amount)return alert('Preencha categoria, descrição e valor.');window.state.expenses.push({...d,id:genId()});saveState('expenses');renderDespesas();toast('Despesa registrada!');};
 window.delDespesa=function(id){window.state.expenses=window.state.expenses.filter(e=>e.id!==id);saveState('expenses');renderDespesas();};
 
 // ── RELATÓRIOS ───────────────────────────────────────────────────────────
@@ -754,6 +767,13 @@ async function renderConfig(){
         <div class="alert alert-amber" style="font-size:12px;margin-bottom:16px">Faça um backup antes de restaurar. A operação não pode ser desfeita.</div>
         <label style="display:block;width:100%"><div class="btn btn-amber" style="width:100%;justify-content:center;cursor:pointer">⬆️ Selecionar arquivo .json</div><input type="file" accept=".json" onchange="restoreBackup(this)" style="display:none"></label>
         <div id="restore-status" style="margin-top:10px;font-size:12px;color:var(--sub)"></div>
+      </div></div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px">🤝 Configurar Sócios</div>
+        <p style="font-size:13px;color:var(--sub);margin-bottom:14px">Defina os nomes e percentuais de participação para o relatório de divisão de custos.</p>
+        ${(window.state.partners||[]).map(p=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;font-weight:600">${p.name}</span><span class="badge badge-indigo">${p.share}%</span></div>`).join('')}
+        <button class="btn" style="width:100%;justify-content:center;margin-top:14px" onclick="openPartnerModal()">✏️ Editar Sócios</button>
+      </div>
       </div>
     </div>`;
   }
@@ -788,10 +808,60 @@ window.sendReset=async function(email){try{await sendPasswordResetEmail(auth,ema
 window.openResetOwnPw=function(){openModal('🔑 Trocar Senha',`<p style="font-size:13px;color:var(--sub);margin-bottom:16px">Um link de redefinição será enviado para <strong>${currentUser?.email}</strong>.</p><div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="sendReset('${currentUser?.email}');closeModal()">Enviar e-mail</button></div>`);};
 
 // ── ROUTER ───────────────────────────────────────────────────────────────
+// ── UGC CREATORS ─────────────────────────────────────────────────────────
+function renderUgc(){
+  const creators=window.state.ugcCreators||[];
+  const totalInvested=creators.reduce((a,c)=>a+(c.costBooks||0)+(c.costFreight||0),0);
+  const totalSalesFromUgc=window.state.movements.filter(m=>m.type==='saida'&&m.ugcCode).reduce((a,m)=>a+m.quantity*m.unitPrice,0);
+  document.getElementById('content').innerHTML=`
+    <div class="grid3" style="margin-bottom:14px">
+      ${statCard('🎯','Criadores Ativos',creators.filter(c=>c.status==='ativo').length,'#6366f1','')}
+      ${statCard('💸','Investimento UGC',BRL(totalInvested),'#f59e0b','')}
+      ${statCard('📈','Receita via UGC',BRL(totalSalesFromUgc),'#10b981','')}
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:13px;color:var(--sub)">${creators.length} criador(es) cadastrado(s)</div>
+        <button class="btn" onclick="openUgcModal()">+ Novo Criador</button>
+      </div>
+    </div>
+    <div class="card">
+      ${tbl([
+        {label:'Criador',render:r=>`<div><div style="font-weight:600">${r.name}</div><div style="font-size:11px;color:var(--sub)">${r.product||'-'}</div></div>`},
+        {label:'Código',render:r=>`<span class="badge badge-indigo" style="font-family:monospace;font-size:12px">${r.code}</span>`},
+        {label:'Desconto',render:r=>`<span class="badge badge-amber">${r.discount||10}%</span>`},
+        {label:'Investimento',render:r=>`${BRL((r.costBooks||0)+(r.costFreight||0))}`},
+        {label:'Vendas c/ código',render:r=>{const s=window.state.movements.filter(m=>m.type==='saida'&&m.ugcCode===r.code);const rev=s.reduce((a,m)=>a+m.quantity*m.unitPrice,0);return`<span style="font-weight:600">${s.length} venda(s) · ${BRL(rev)}</span>`;}},
+        {label:'ROI',render:r=>{const inv=(r.costBooks||0)+(r.costFreight||0);const rev=window.state.movements.filter(m=>m.type==='saida'&&m.ugcCode===r.code).reduce((a,m)=>a+m.quantity*m.unitPrice,0);const roi=inv>0?((rev-inv)/inv*100):0;return`<span style="color:${roi>=0?'#10b981':'#ef4444'};font-weight:600">${roi.toFixed(0)}%</span>`;}},
+        {label:'Status',render:r=>`<span class="badge ${r.status==='ativo'?'badge-green':'badge-gray'}">${r.status||'ativo'}</span>`},
+        {label:'',render:r=>`<div style="display:flex;gap:5px"><button class="btn btn-sm" onclick='openUgcModal(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✏️</button><button class="btn btn-sm btn-red" onclick="delUgc('${r.id}')">🗑️</button></div>`},
+      ],creators,'Nenhum criador UGC cadastrado.')}
+    </div>`;
+}
+window.openUgcModal=function(c=null){openModal(c?'Editar Criador':'Novo Criador UGC',`
+  <div class="grid2">${fg('Nome do Criador *',inp('uf-name','text',c?.name||''))}${fg('Código de Desconto *',inp('uf-code','text',c?.code||'','Ex: RAY10'))}</div>
+  ${fg('Produto/Kit enviado',inp('uf-product','text',c?.product||'','Ex: Mega Combo + Devocional'))}
+  <div class="grid3">
+    ${fg('Desconto %',inp('uf-disc','number',c?.discount||10,'10'))}
+    ${fg('Custo dos Livros ($)',cinp('uf-books',c?.costBooks||0))}
+    ${fg('Custo do Frete ($)',cinp('uf-freight',c?.costFreight||0))}
+  </div>
+  <div class="grid2">${fg('Data de Início',inp('uf-date','date',c?.startDate||today()))}${fg('Status',sel('uf-status',[{v:'ativo',l:'Ativo'},{v:'inativo',l:'Inativo'}],c?.status||'ativo'))}</div>
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveUgc('${c?.id||''}')">Salvar</button></div>`);};
+window.saveUgc=function(id){const d={name:document.getElementById('uf-name').value.trim(),code:document.getElementById('uf-code').value.trim().toUpperCase(),product:document.getElementById('uf-product').value,discount:parseFloat(document.getElementById('uf-disc').value)||10,costBooks:parseCur(document.getElementById('uf-books').value),costFreight:parseCur(document.getElementById('uf-freight').value),startDate:document.getElementById('uf-date').value,status:document.getElementById('uf-status').value};if(!d.name||!d.code)return alert('Nome e código são obrigatórios.');if(!window.state.ugcCreators)window.state.ugcCreators=[];if(id)window.state.ugcCreators=window.state.ugcCreators.map(c=>c.id===id?{...c,...d}:c);else window.state.ugcCreators.push({...d,id:genId()});saveState('ugcCreators');closeModal();renderUgc();toast(id?'Criador atualizado!':'Criador cadastrado!');};
+window.delUgc=function(id){if(!confirm('Excluir criador?'))return;window.state.ugcCreators=window.state.ugcCreators.filter(c=>c.id!==id);saveState('ugcCreators');renderUgc();};
+
+// ── PARTNERS CONFIG (inside config page) ─────────────────────────────────
+window.openPartnerModal=function(){const partners=window.state.partners||[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}];openModal('Configurar Sócios',`
+  <div class="alert alert-blue" style="font-size:12px;margin-bottom:14px">As percentagens devem somar 100%.</div>
+  ${partners.map((p,i)=>`<div style="background:#f8fafc;border-radius:10px;padding:14px;margin-bottom:10px"><div style="font-size:13px;font-weight:600;margin-bottom:10px">Sócio ${i+1}</div><div class="grid3">${fg('Nome',inp('pf-name-'+i,'text',p.name||''))}${fg('E-mail',inp('pf-email-'+i,'email',p.email||''))}${fg('Participação %',inp('pf-share-'+i,'number',p.share||50,'50'))}</div></div>`).join('')}
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="savePartners(${partners.length})">Salvar</button></div>`);};
+window.savePartners=function(n){const partners=[];let total=0;for(let i=0;i<n;i++){const share=parseFloat(document.getElementById('pf-share-'+i)?.value)||50;total+=share;partners.push({id:'p'+(i+1),name:document.getElementById('pf-name-'+i)?.value||'Sócio '+(i+1),email:document.getElementById('pf-email-'+i)?.value||'',share});}if(Math.abs(total-100)>0.01)return alert('As participações devem somar 100%. Total atual: '+total+'%');window.state.partners=partners;saveState('partners');closeModal();renderConfig();toast('Sócios atualizados!');};
+
 window.renderDashboard=renderDashboard;window.renderLivros=renderLivros;window.renderClientes=renderClientes;window.renderFornecedores=renderFornecedores;window.renderDespesas=renderDespesas;window.renderRelatorios=renderRelatorios;window.renderConfig=renderConfig;window.saveState=saveState;
 
 function renderPage(p){
-  const map={dashboard:renderDashboard,livros:renderLivros,movimentos:window.renderMovimentos,kits:window.renderKits,clientes:renderClientes,fornecedores:renderFornecedores,despesas:renderDespesas,relatorios:renderRelatorios,config:renderConfig};
+  const map={dashboard:renderDashboard,livros:renderLivros,movimentos:window.renderMovimentos,kits:window.renderKits,clientes:renderClientes,fornecedores:renderFornecedores,despesas:renderDespesas,relatorios:renderRelatorios,ugc:renderUgc,config:renderConfig};
   if(map[p])map[p]();
 }
 
@@ -811,6 +881,8 @@ initFirebase().then(()=>{
       document.getElementById('app').style.display='flex';
       buildNav();renderPage('dashboard');
       if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+      // Keep-alive: ping server every 4min to prevent container sleeping
+      setInterval(()=>fetch('/health').catch(()=>{}), 4*60*1000);
     }else{
       currentUser=null;window._dataLoaded=false;stopListeners();
       document.getElementById('loading-screen').style.display='none';
