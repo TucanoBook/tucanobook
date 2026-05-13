@@ -414,19 +414,8 @@ function renderDashboard(){
   const recent=[...S.movements].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
   const lbl=[],rv=[],ex=[];
   for(let i=5;i>=0;i--){const d=new Date(yr,mo-i,1);lbl.push(d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''));const m2=d.getMonth(),y2=d.getFullYear();rv.push(+S.movements.filter(mv=>mv.type==='saida'&&new Date(mv.date).getMonth()===m2&&new Date(mv.date).getFullYear()===y2).reduce((a,mv)=>a+mv.quantity*mv.unitPrice,0).toFixed(2));ex.push(+S.expenses.filter(e=>new Date(e.date).getMonth()===m2&&new Date(e.date).getFullYear()===y2).reduce((a,e)=>a+parseCur(e.amount),0).toFixed(2));}
-  // Apply search + filter
-  let filteredKits=[...window.state.kits];
-  const kSalesCount=kit=>window.state.movements.filter(m=>m.type==='saida'&&m.bookId===`kit-${kit.id}`).reduce((a,m)=>a+m.quantity,0);
-  const kProfit=kit=>{const cost=kCost(kit);return(parseCur(kit.salePrice)-cost)*kSalesCount(kit);};
-  if(_kitSearch){const q=_kitSearch.toLowerCase();filteredKits=filteredKits.filter(k=>k.name.toLowerCase().includes(q));}
-  if(_kitFilter==='mais_vendidos')filteredKits.sort((a,b)=>kSalesCount(b)-kSalesCount(a));
-  else if(_kitFilter==='mais_lucro')filteredKits.sort((a,b)=>kProfit(b)-kProfit(a));
-  else if(_kitFilter==='menos_vendidos')filteredKits.sort((a,b)=>kSalesCount(a)-kSalesCount(b));
-  else if(_kitFilter==='estoque')filteredKits=filteredKits.filter(k=>(k.stock||0)>0);
-  else if(_kitFilter==='sem_estoque')filteredKits=filteredKits.filter(k=>!(k.stock||0));
-  const kitsToShow=filteredKits;
   document.getElementById('content').innerHTML=`
-    <div class="grid4" style="margin-bottom:16px">${statCard('📚','Livros em Estoque',tot,'#6366f1',BRL(val)+' em valor')}${statCard('👥','Clientes',S.clients.length,'#3b82f6','')}${statCard('📈','Receita do Mês',BRL(mRev),'#10b981','')}${statCard('💸','Despesas do Mês',BRL(mExp),'#f59e0b','#f59e0b','')}</div>
+    <div class="grid4" style="margin-bottom:16px">${statCard('📚','Livros em Estoque',tot,'#6366f1',BRL(val)+' em valor')}${statCard('👥','Clientes',S.clients.length,'#3b82f6','')}${statCard('📈','Receita do Mês',BRL(mRev),'#10b981','')}${statCard('💸','Despesas do Mês',BRL(mExp),'#f59e0b','')}</div>
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px">
       <div class="card"><div style="font-size:13px;font-weight:600;margin-bottom:14px">📊 Receita vs Despesas — 6 meses</div><div class="chart-wrap"><canvas id="dash-chart"></canvas></div></div>
       <div class="card"><div style="font-size:13px;font-weight:600;margin-bottom:12px">⚠️ Estoque Crítico</div>${low.length===0?'<div style="color:var(--muted);font-size:13px;padding:16px 0;text-align:center">✅ Todos os livros OK!</div>':low.map(b=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div style="font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.title}</div><span class="badge badge-red" style="margin-left:8px">${b.stock}</span></div>`).join('')}</div>
@@ -557,6 +546,17 @@ window.setKitFilter=function(f){
 };
 window.renderKits=function(){
   const kCost=kit=>kit.items.reduce((a,i)=>{const b=window.state.books.find(bk=>bk.id===i.bookId);return a+(b?b.costPrice*i.quantity:0);},0);
+  // Filter & sort
+  let filteredKits=[...window.state.kits];
+  const kSalesCount=kit=>window.state.movements.filter(m=>m.type==='saida'&&m.bookId===`kit-${kit.id}`).reduce((a,m)=>a+m.quantity,0);
+  const kProfit=kit=>{const cost=kCost(kit);return(parseCur(kit.salePrice)-cost)*kSalesCount(kit);};
+  if(_kitSearch){const q=_kitSearch.toLowerCase();filteredKits=filteredKits.filter(k=>k.name.toLowerCase().includes(q));}
+  if(_kitFilter==='mais_vendidos')filteredKits.sort((a,b)=>kSalesCount(b)-kSalesCount(a));
+  else if(_kitFilter==='mais_lucro')filteredKits.sort((a,b)=>kProfit(b)-kProfit(a));
+  else if(_kitFilter==='menos_vendidos')filteredKits.sort((a,b)=>kSalesCount(a)-kSalesCount(b));
+  else if(_kitFilter==='estoque')filteredKits=filteredKits.filter(k=>(k.stock||0)>0);
+  else if(_kitFilter==='sem_estoque')filteredKits=filteredKits.filter(k=>!(k.stock||0));
+  const kitsToShow=filteredKits;
   document.getElementById('content').innerHTML=`
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
       <input class="search-input" id="kit-search" placeholder="🔍 Buscar kit..." oninput="setKitSearch(this.value)" style="max-width:240px">
@@ -697,6 +697,18 @@ function renderDespesas(){
         <div class="fg"><label>Pago por</label><select id="gt-paidby" style="width:100%"><option value="">Não especificado</option>${window.state.partners.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
         ${fg('Observações',inp('gt-notes','text','','Opcional'))}
         <button class="btn" style="width:100%;justify-content:center" onclick="saveDespesa()">Registrar Despesa</button>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:14px;font-weight:700">📥 Importar do Shopify</div>
+            <div style="font-size:12px;color:var(--sub);margin-top:2px">Pedidos → Exportar → Exportar como CSV</div>
+          </div>
+          <label style="cursor:pointer">
+            <div class="btn" style="background:#96bf48">🛒 Importar CSV Shopify</div>
+            <input type="file" accept=".csv" onchange="importShopifyCSV(this)" style="display:none">
+          </label>
+        </div>
       </div>
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
