@@ -242,7 +242,7 @@ tr:hover td{background:#fafbff}.empty-row td{text-align:center;color:var(--muted
 
 <script type="module">
 import{initializeApp}from'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import{getFirestore,doc,getDoc,setDoc,getDocs,collection,updateDoc,enableIndexedDbPersistence}from'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import{getFirestore,doc,getDoc,setDoc,getDocs,collection,updateDoc,onSnapshot,enableIndexedDbPersistence}from'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import{getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged,sendPasswordResetEmail,updateProfile}from'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
 let db,auth,currentUser=null;
@@ -284,10 +284,43 @@ const BOOKS0=[
 ];
 window.state={books:[],clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Marketing','Embalagem','Transporte','Frete','Material','Outros']};
 
+let _rtListeners=[];
+function stopListeners(){_rtListeners.forEach(u=>u());_rtListeners=[];}
+
 async function loadState(){
   setLoadMsg('Carregando dados...');
   const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Marketing','Embalagem','Transporte','Frete','Material','Outros']};
-  await Promise.all(Object.keys(defs).map(async key=>{try{const s=await getDoc(doc(db,COLL,key));window.state[key]=s.exists()?s.data().items:defs[key];}catch{window.state[key]=defs[key];}}));
+  // First load: get current data
+  await Promise.all(Object.keys(defs).map(async key=>{
+    try{const s=await getDoc(doc(db,COLL,key));window.state[key]=s.exists()?s.data().items:defs[key];}
+    catch{window.state[key]=defs[key];}
+  }));
+}
+
+function setupRealtime(){
+  stopListeners();
+  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Marketing','Embalagem','Transporte','Frete','Material','Outros']};
+  let _firstLoad={};
+  Object.keys(defs).forEach(key=>{
+    _firstLoad[key]=true;
+    const unsub=onSnapshot(doc(db,COLL,key),snap=>{
+      const newData=snap.exists()?snap.data().items:defs[key];
+      if(_firstLoad[key]){_firstLoad[key]=false;return;} // skip first trigger (already loaded)
+      const changed=JSON.stringify(newData)!==JSON.stringify(window.state[key]);
+      if(changed){
+        window.state[key]=newData;
+        // Show sync indicator
+        const si=document.getElementById('save-indicator');
+        if(si){si.textContent='🔄 Sincronizado';si.style.color='#3b82f6';si.style.display='block';clearTimeout(si._t);si._t=setTimeout(()=>{si.style.display='none';si.style.color='#10b981';},2500);}
+        // Re-render current page silently
+        try{renderPage(curPage);}catch(e){}
+      }
+    },err=>{
+      if(err.code==='permission-denied')console.warn('Realtime: permissão negada para',key);
+    });
+    _rtListeners.push(unsub);
+  });
+  console.log('✅ Sincronização em tempo real ativa');
 }
 
 let saveTimer={};
@@ -773,13 +806,13 @@ initFirebase().then(()=>{
       document.getElementById('sb-avatar').textContent=uname[0].toUpperCase();
       document.getElementById('sb-uname').textContent=uname;
       document.getElementById('sb-uemail').textContent=user.email;
-      if(!window._dataLoaded){await loadState();window._dataLoaded=true;}
+      if(!window._dataLoaded){await loadState();window._dataLoaded=true;setupRealtime();}
       document.getElementById('loading-screen').style.display='none';
       document.getElementById('app').style.display='flex';
       buildNav();renderPage('dashboard');
       if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
     }else{
-      currentUser=null;window._dataLoaded=false;
+      currentUser=null;window._dataLoaded=false;stopListeners();
       document.getElementById('loading-screen').style.display='none';
       document.getElementById('app').style.display='none';
       document.getElementById('auth-screen').style.display='flex';
