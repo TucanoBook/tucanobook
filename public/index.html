@@ -311,14 +311,14 @@ const BOOKS0=[
   {id:'b4',title:'O Alquimista',author:'Paulo Coelho',isbn:'978-85-260-0408-5',category:'Literatura',costPrice:14,salePrice:29,stock:40},
   {id:'b5',title:'Sapiens',author:'Yuval Noah Harari',isbn:'978-85-254-3526-0',category:'Não-ficção',costPrice:22,salePrice:45,stock:25},
 ];
-window.state={books:[],clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}]};
+window.state={books:[],clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],bookCategories:['Literatura','Clássicos','Ficção Científica','Romance','Autoajuda','Negócios','Infantil','Não-ficção','HQ','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}]};
 
 let _rtListeners=[];
 function stopListeners(){_rtListeners.forEach(u=>u());_rtListeners=[];}
 
 async function loadState(){
   setLoadMsg('Carregando dados...');
-  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}],compraLists:[]};
+  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],bookCategories:['Literatura','Clássicos','Ficção Científica','Romance','Autoajuda','Negócios','Infantil','Não-ficção','HQ','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}],compraLists:[]};
   // First load: get current data
   await Promise.all(Object.keys(defs).map(async key=>{
     try{const s=await getDoc(doc(db,COLL,key));window.state[key]=s.exists()?s.data().items:defs[key];}
@@ -328,7 +328,7 @@ async function loadState(){
 
 function setupRealtime(){
   stopListeners();
-  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}],compraLists:[]};
+  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],bookCategories:['Literatura','Clássicos','Ficção Científica','Romance','Autoajuda','Negócios','Infantil','Não-ficção','HQ','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}],compraLists:[]};
   let _firstLoad={};
   Object.keys(defs).forEach(key=>{
     _firstLoad[key]=true;
@@ -363,7 +363,7 @@ const genId=()=>`${Date.now()}-${Math.floor(Math.random()*99999)}`;
 const BRL=n=>`$ ${Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',')}`;const BRL_LABEL='USD ($)';
 const fmtD=d=>d?new Date(d+'T00:00:00').toLocaleDateString('pt-BR'):'-';
 const today=()=>new Date().toISOString().slice(0,10);
-const BCATS=['Literatura','Clássicos','Ficção Científica','Romance','Autoajuda','Negócios','Infantil','Não-ficção','HQ','Outros'];
+const BCATS_DEFAULT=['Literatura','Clássicos','Ficção Científica','Romance','Autoajuda','Negócios','Infantil','Não-ficção','HQ','Outros'];
 let charts={};
 window.toast=function(msg,type='success'){const el=document.getElementById('toast');el.textContent=msg;el.className='toast show '+type;clearTimeout(el._t);el._t=setTimeout(()=>el.className='toast',3200);};
 
@@ -405,6 +405,7 @@ const PAGES={
   movimentos:{icon:'🔄',label:'Entradas/Saídas',section:'Estoque',sub:'Compras e vendas'},
   kits:{icon:'🎁',label:'Kits',section:'Estoque',sub:'Montar e vender kits'},
   compras:{icon:'🛒',label:'Lista de Compras',section:'Estoque',sub:'Calcular necessidade de livros'},
+  inventario:{icon:'📦',label:'Inventário',section:'Estoque',sub:'Contagem e ajuste de estoque'},
   clientes:{icon:'👥',label:'Clientes',section:'Comercial',sub:'Cadastro e histórico'},
   fornecedores:{icon:'🏭',label:'Fornecedores',section:'Comercial',sub:'Cadastro de fornecedores'},
   despesas:{icon:'💸',label:'Despesas',section:'Financeiro',sub:'Controle de gastos'},
@@ -412,7 +413,7 @@ const PAGES={
   ugc:{icon:'🎯',label:'Criadores UGC',section:'Marketing',sub:'Influencers e códigos de desconto'},
   config:{icon:'⚙️',label:'Configurações',section:'Sistema',sub:'Usuários, categorias e dados'},
 };
-const SECTIONS={Principal:['dashboard'],Estoque:['livros','movimentos','kits','compras'],Comercial:['clientes','fornecedores'],Financeiro:['despesas','relatorios'],Sistema:['config']};
+const SECTIONS={Principal:['dashboard'],Estoque:['livros','movimentos','kits','compras','inventario'],Comercial:['clientes','fornecedores'],Financeiro:['despesas','relatorios'],Sistema:['config']};
 let curPage='dashboard';
 
 function buildNav(){
@@ -461,14 +462,14 @@ let bookSearch='',bookCat='';
 function renderLivros(){
   const q=bookSearch.toLowerCase(),filtered=window.state.books.filter(b=>(b.title.toLowerCase().includes(q)||b.author.toLowerCase().includes(q))&&(!bookCat||b.category===bookCat));
   document.getElementById('content').innerHTML=`
-    <div class="card" style="margin-bottom:14px"><div class="search-bar"><input class="search-input" id="book-search" placeholder="🔍 Buscar título ou autor..." oninput="setBookSearch(this.value)" value="${bookSearch}"><select id="book-cat" onchange="setBookCat(this.value)" style="padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'Sora',sans-serif;outline:none"><option value="">Todas categorias</option>${BCATS.map(c=>`<option ${c===bookCat?'selected':''}>${c}</option>`).join('')}</select><button class="btn" style="margin-left:auto" onclick="openBookModal()">+ Novo Livro</button></div><div style="font-size:12px;color:var(--muted)">${filtered.length} livro(s)</div></div>
+    <div class="card" style="margin-bottom:14px"><div class="search-bar"><input class="search-input" id="book-search" placeholder="🔍 Buscar título ou autor..." oninput="setBookSearch(this.value)" value="${bookSearch}"><select id="book-cat" onchange="setBookCat(this.value)" style="padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'Sora',sans-serif;outline:none"><option value="">Todas categorias</option>${(window.state.bookCategories||BCATS_DEFAULT).map(c=>`<option ${c===bookCat?'selected':''}>${c}</option>`).join('')}</select><button class="btn" style="margin-left:auto" onclick="openBookModal()">+ Novo Livro</button></div><div style="font-size:12px;color:var(--muted)">${filtered.length} livro(s)</div></div>
     <div class="card">${tbl([{label:'Título / Autor',render:r=>`<div><div style="font-weight:600">${r.title}</div><div style="font-size:11px;color:var(--sub)">${r.author}</div></div>`},{label:'Categoria',render:r=>`<span class="badge badge-indigo">${r.category}</span>`},{label:'Custo',render:r=>BRL(r.costPrice)},{label:'Venda',render:r=>BRL(r.salePrice)},{label:'Markup',render:r=>{const m=r.costPrice>0?((r.salePrice-r.costPrice)/r.costPrice*100):0;return`<span style="color:${m>30?'#10b981':m>10?'#f59e0b':'#ef4444'};font-weight:600">${m.toFixed(1)}%</span>`}},{label:'Margem',render:r=>{const m=r.salePrice>0?((r.salePrice-r.costPrice)/r.salePrice*100):0;return`<span style="color:${m>20?'#10b981':m>5?'#f59e0b':'#ef4444'};font-weight:600">${m.toFixed(1)}%</span>`}},{label:'Estoque',render:r=>`<span class="badge ${r.stock<=5?'badge-red':r.stock<=15?'badge-amber':'badge-green'}">${r.stock}</span>`},{label:'',render:r=>`<div style="display:flex;gap:5px"><button class="btn btn-sm" onclick='openBookModal(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✏️</button><button class="btn btn-sm btn-red" onclick="delBook('${r.id}')">🗑️</button></div>`}],filtered)}</div>`;
 }
 window.openBookModal=function(book=null){
   openModal(book?'Editar Livro':'Novo Livro',`
     ${fg('Título *',inp('f-title','text',book?.title||''))}
     ${fg('Autor *',inp('f-author','text',book?.author||''))}
-    <div class="grid2">${fg('ISBN',inp('f-isbn','text',book?.isbn||''))}${fg('Categoria',sel('f-cat',BCATS,book?.category||'Literatura'))}</div>
+    <div class="grid2">${fg('ISBN',inp('f-isbn','text',book?.isbn||''))}${fg('Categoria',sel('f-cat',(window.state.bookCategories||BCATS_DEFAULT),book?.category||'Literatura'))}</div>
     <div class="grid2">
       ${fg('Preço de Custo (R$)',cinp('f-cost',book?.costPrice||0))}
       ${fg('Preço de Venda (R$)',cinp('f-sale',book?.salePrice||0))}
@@ -942,7 +943,7 @@ function renderRelatorios(){
   }).filter(b=>b.sold>0);
   const topSold=[...bookStats].sort((a,b)=>b.sold-a.sold).slice(0,6);
   const topProfit=[...bookStats].sort((a,b)=>b.profit-a.profit).slice(0,6);
-  const kitRev=S.movements.filter(m=>m.type==='saida'&&m.bookId?.startsWith('kit-')).reduce((a,m)=>a+m.quantity*m.unitPrice,0);const catRev=[...(kitRev>0?[{name:'Kits',value:+kitRev.toFixed(2)}]:[]),...BCATS.map(cat=>{const v=S.movements.filter(m=>m.type==='saida'&&!m.bookId?.startsWith('kit-')).reduce((a,m)=>{const b=S.books.find(bk=>bk.id===m.bookId);return b?.category===cat?a+m.quantity*m.unitPrice:a;},0);return{name:cat,value:+v.toFixed(2)};})].filter(c=>c.value>0).sort((a,b)=>b.value-a.value).slice(0,6);
+  const kitRev=S.movements.filter(m=>m.type==='saida'&&m.bookId?.startsWith('kit-')).reduce((a,m)=>a+m.quantity*m.unitPrice,0);const catRev=[...(kitRev>0?[{name:'Kits',value:+kitRev.toFixed(2)}]:[]),...(window.state.bookCategories||BCATS_DEFAULT).map(cat=>{const v=S.movements.filter(m=>m.type==='saida'&&!m.bookId?.startsWith('kit-')).reduce((a,m)=>{const b=S.books.find(bk=>bk.id===m.bookId);return b?.category===cat?a+m.quantity*m.unitPrice:a;},0);return{name:cat,value:+v.toFixed(2)};})].filter(c=>c.value>0).sort((a,b)=>b.value-a.value).slice(0,6);
   const catExp=window.state.expenseCategories.map(cat=>({name:cat,value:+S.expenses.filter(e=>e.category===cat).reduce((a,e)=>a+parseCur(e.amount),0).toFixed(2)})).filter(c=>c.value>0);
   document.getElementById('content').innerHTML=`
     <div class="grid4" style="margin-bottom:14px">${statCard('📈','Receita Total',BRL(tRev),'#10b981','')}${statCard('📉','Custo Compras',BRL(tCost),'#ef4444','')}${statCard('💸','Despesas',BRL(tExp),'#f59e0b','')}${statCard('💰','Lucro Líquido',BRL(profit),profit>=0?'#10b981':'#ef4444','')}</div>
@@ -987,11 +988,18 @@ async function renderConfig(){
 
   if(configTab==='categorias'){
     const cats=window.state.expenseCategories;
-    html+=`<div class="card">
+    const bcats=window.state.bookCategories||BCATS_DEFAULT;
+    html+=`<div class="card" style="margin-bottom:14px">
       <div style="font-size:14px;font-weight:700;margin-bottom:14px">🏷️ Categorias de Despesas</div>
       <p style="font-size:13px;color:var(--sub);margin-bottom:14px">Estas categorias aparecem no cadastro de despesas.</p>
       <div id="cats-list" style="display:flex;flex-wrap:wrap;margin-bottom:16px">${cats.map((c,i)=>`<span class="tag">${c}<button onclick="removeCategory(${i})">×</button></span>`).join('')}</div>
       <div style="display:flex;gap:8px"><input type="text" id="new-cat-inp" placeholder="Nova categoria..." style="flex:1;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'Sora',sans-serif;outline:none"><button class="btn" onclick="addCategory()">+ Adicionar</button></div>
+    </div>
+    <div class="card">
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px">📚 Categorias de Livros</div>
+      <p style="font-size:13px;color:var(--sub);margin-bottom:14px">Estas categorias aparecem no cadastro e filtro de livros.</p>
+      <div id="bcats-list" style="display:flex;flex-wrap:wrap;margin-bottom:16px">${bcats.map((c,i)=>`<span class="tag">${c}<button onclick="removeBookCategory(${i})">×</button></span>`).join('')}</div>
+      <div style="display:flex;gap:8px"><input type="text" id="new-bcat-inp" placeholder="Nova categoria de livro..." style="flex:1;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'Sora',sans-serif;outline:none"><button class="btn" onclick="addBookCategory()">+ Adicionar</button></div>
     </div>`;
   }
 
@@ -1027,6 +1035,8 @@ async function renderConfig(){
 
 window.addCategory=function(){const v=document.getElementById('new-cat-inp')?.value?.trim();if(!v||window.state.expenseCategories.includes(v))return;window.state.expenseCategories.push(v);saveState('expenseCategories');renderConfig();toast('Categoria adicionada!');};
 window.removeCategory=function(i){if(!confirm('Remover categoria?'))return;window.state.expenseCategories.splice(i,1);saveState('expenseCategories');renderConfig();};
+window.addBookCategory=function(){const v=document.getElementById('new-bcat-inp')?.value?.trim();if(!v)return;if(!window.state.bookCategories)window.state.bookCategories=BCATS_DEFAULT.slice();if(window.state.bookCategories.includes(v))return;window.state.bookCategories.push(v);saveState('bookCategories');renderConfig();toast('Categoria de livro adicionada!');};
+window.removeBookCategory=function(i){if(!confirm('Remover categoria de livro?'))return;if(!window.state.bookCategories)window.state.bookCategories=BCATS_DEFAULT.slice();window.state.bookCategories.splice(i,1);saveState('bookCategories');renderConfig();};
 window.downloadBackup=function(){const data=JSON.stringify(window.state,null,2);const blob=new Blob([data],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`tucanobook-backup-${today()}-${new Date().toTimeString().slice(0,8).replace(/:/g,'h')}.json`;a.click();URL.revokeObjectURL(url);toast('Backup baixado!');};
 window.restoreBackup=async function(input){
   const file=input.files[0];if(!file)return;
@@ -1102,12 +1112,92 @@ window.openPartnerModal=function(){const partners=window.state.partners||[{id:'p
   <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="savePartners(${partners.length})">Salvar</button></div>`);};
 window.savePartners=function(n){const partners=[];let total=0;for(let i=0;i<n;i++){const share=parseFloat(document.getElementById('pf-share-'+i)?.value)||50;total+=share;partners.push({id:'p'+(i+1),name:document.getElementById('pf-name-'+i)?.value||'Sócio '+(i+1),email:document.getElementById('pf-email-'+i)?.value||'',share});}if(Math.abs(total-100)>0.01)return alert('As participações devem somar 100%. Total atual: '+total+'%');window.state.partners=partners;saveState('partners');closeModal();renderConfig();toast('Sócios atualizados!');};
 
-window.renderDashboard=renderDashboard;window.renderLivros=renderLivros;window.renderClientes=renderClientes;window.renderFornecedores=renderFornecedores;window.renderDespesas=renderDespesas;window.renderRelatorios=renderRelatorios;window.renderConfig=renderConfig;window.renderCompras=renderCompras;window.saveState=saveState;
+function renderInventario(){
+  var S=window.state;
+  if(!window._inventCounts)window._inventCounts={};
+  var rows=S.books.map(function(b){
+    var phys=window._inventCounts[b.id]!==undefined?window._inventCounts[b.id]:b.stock;
+    var diff=phys-b.stock;
+    var diffColor=diff<0?'#dc2626':diff>0?'#10b981':'#64748b';
+    var diffText=(diff>0?'+':'')+diff;
+    return '<tr>'
+      +'<td><div style="font-weight:600">'+b.title+'</div><div style="font-size:11px;color:var(--sub)">'+b.author+'</div></td>'
+      +'<td style="text-align:center"><span class="badge '+(b.stock<=5?'badge-red':b.stock<=15?'badge-amber':'badge-green')+'">'+b.stock+'</span></td>'
+      +'<td style="text-align:center"><input type="number" min="0" value="'+phys+'" oninput="window._inventCounts[\''+b.id+'\']=parseInt(this.value)||0;updateInventDiff(\''+b.id+'\',this.value,'+b.stock+')" style="width:80px;padding:6px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;text-align:center;font-family:\'Sora\',sans-serif"></td>'
+      +'<td id="inv-diff-'+b.id+'" style="text-align:center;font-weight:600;color:'+diffColor+'">'+diffText+'</td>'
+      +'</tr>';
+  }).join('');
+  document.getElementById('content').innerHTML=
+    '<div class="card" style="margin-bottom:14px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
+    +'<div><div style="font-size:14px;font-weight:700">📦 Contagem de Estoque</div>'
+    +'<div style="font-size:12px;color:var(--sub);margin-top:3px">Insira a contagem física de cada livro. Diferenças serão registradas como ajustes.</div></div>'
+    +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+    +'<div style="display:flex;align-items:center;gap:8px"><label style="font-size:13px;font-weight:600">Data:</label><input type="date" id="inv-date" value="'+today()+'" style="padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:\'Sora\',sans-serif"></div>'
+    +'<button class="btn btn-green" onclick="confirmInventario()">✅ Confirmar Inventário</button>'
+    +'<button class="btn btn-gray" onclick="window._inventCounts={};renderInventario()">🔄 Resetar</button>'
+    +'</div></div></div>'
+    +'<div class="card">'
+    +'<table><thead><tr>'
+    +'<th>Livro / Autor</th>'
+    +'<th style="text-align:center">Estoque Sistema</th>'
+    +'<th style="text-align:center">Contagem Física</th>'
+    +'<th style="text-align:center">Diferença</th>'
+    +'</tr></thead><tbody>'
+    +(S.books.length?rows:'<tr class="empty-row"><td colspan="4">Nenhum livro cadastrado.</td></tr>')
+    +'</tbody></table></div>';
+}
+
+window.updateInventDiff=function(bookId,physVal,sysStock){
+  var phys=parseInt(physVal)||0;
+  var diff=phys-sysStock;
+  var el=document.getElementById('inv-diff-'+bookId);
+  if(el){
+    el.textContent=(diff>0?'+':'')+diff;
+    el.style.color=diff<0?'#dc2626':diff>0?'#10b981':'#64748b';
+  }
+};
+
+window.confirmInventario=function(){
+  var S=window.state;
+  var date=document.getElementById('inv-date')?.value||today();
+  var changes=0;
+  S.books.forEach(function(b){
+    var phys=window._inventCounts[b.id];
+    if(phys===undefined)return;
+    var diff=phys-b.stock;
+    if(diff===0)return;
+    if(diff<0){
+      S.movements.push({id:genId(),type:'perda',bookId:b.id,bookTitle:b.title,
+        quantity:Math.abs(diff),unitPrice:b.costPrice||0,grossUnitPrice:b.costPrice||0,
+        freightCost:0,freightImport:0,freightBR:0,clientId:'',clientName:'',
+        ugcCode:'',discountPct:0,shopifyFee:0,cogs:(b.costPrice||0)*Math.abs(diff),
+        date:date,notes:'Ajuste inventário',source:'inventario'});
+    }else{
+      S.movements.push({id:genId(),type:'entrada',bookId:b.id,bookTitle:b.title,
+        quantity:diff,unitPrice:b.costPrice||0,grossUnitPrice:b.costPrice||0,
+        freightCost:0,freightImport:0,freightBR:0,supplierId:'',supplierName:'Ajuste Inventário',
+        ugcCode:'',discountPct:0,shopifyFee:0,cogs:0,
+        date:date,notes:'Ajuste inventário (ganho)',source:'inventario'});
+    }
+    S.books=S.books.map(function(bk){return bk.id===b.id?Object.assign({},bk,{stock:phys}):bk;});
+    changes++;
+  });
+  if(!changes)return toast('Nenhuma diferença para ajustar.');
+  saveState('movements');saveState('books');
+  window._inventCounts={};
+  toast(changes+' ajuste(s) registrado(s)!');
+  renderInventario();
+};
+
+window.renderDashboard=renderDashboard;window.renderLivros=renderLivros;window.renderClientes=renderClientes;window.renderFornecedores=renderFornecedores;window.renderDespesas=renderDespesas;window.renderRelatorios=renderRelatorios;window.renderConfig=renderConfig;window.renderCompras=renderCompras;window.renderInventario=renderInventario;window.saveState=saveState;
 
 // ── SEARCHABLE SELECT ────────────────────────────────────────────────────
-function ssHtml(id,options,placeholder){
+function ssHtml(id,options,placeholder,onNew){
   const opts=options.map(o=>`<div class="ss-item" data-val="${o.value}" data-lbl="${(o.label||'').replace(/"/g,'&quot;')}" onclick="ssPick('${id}',this)">${o.label}</div>`).join('');
-  return `<div class="ss-wrap"><input class="ss-input" id="${id}-txt" placeholder="${placeholder||'Buscar...'}" autocomplete="off" oninput="ssFilter('${id}')" onfocus="ssOpen('${id}')" onblur="setTimeout(()=>ssClose('${id}'),200)"><div class="ss-drop" id="${id}-drop">${opts}</div><input type="hidden" id="${id}" value=""></div>`;
+  const wrap=`<div class="ss-wrap"><input class="ss-input" id="${id}-txt" placeholder="${placeholder||'Buscar...'}" autocomplete="off" oninput="ssFilter('${id}')" onfocus="ssOpen('${id}')" onblur="setTimeout(()=>ssClose('${id}'),200)"><div class="ss-drop" id="${id}-drop">${opts}</div><input type="hidden" id="${id}" value=""></div>`;
+  if(onNew) return `<div style="display:flex;gap:6px;align-items:flex-start">${wrap}<button type="button" onclick="${onNew}" style="padding:9px 10px;background:#e0e7ff;color:#4f46e5;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap;flex-shrink:0">+ Novo</button></div>`;
+  return wrap;
 }
 window.ssFilter=function(id){
   const q=(document.getElementById(id+'-txt')?.value||'').toLowerCase();
@@ -1133,6 +1223,46 @@ window.ssSet=function(id,val,lbl){
   if(inp)inp.value=val;if(txt)txt.value=lbl||val;
 };
 
+window.quickAddClient=function(){
+  var name=prompt('Nome do cliente:');
+  if(!name||!name.trim())return;
+  var newClient={id:genId(),name:name.trim(),email:'',phone:'',city:'',notes:''};
+  window.state.clients.push(newClient);
+  saveState('clients');
+  var drop=document.getElementById('ms-client-drop');
+  if(drop){
+    var el=document.createElement('div');
+    el.className='ss-item';
+    el.dataset.val=newClient.id;
+    el.dataset.lbl=newClient.name;
+    el.innerHTML=newClient.name;
+    el.onclick=function(){ssPick('ms-client',el);};
+    drop.appendChild(el);
+    ssPick('ms-client',el);
+  }
+  toast('Cliente adicionado!');
+};
+
+window.quickAddSupplier=function(){
+  var name=prompt('Nome do fornecedor:');
+  if(!name||!name.trim())return;
+  var newSup={id:genId(),name:name.trim(),cnpj:'',phone:'',email:'',city:'',notes:''};
+  window.state.suppliers.push(newSup);
+  saveState('suppliers');
+  var drop=document.getElementById('ms-supplier-drop');
+  if(drop){
+    var el=document.createElement('div');
+    el.className='ss-item';
+    el.dataset.val=newSup.id;
+    el.dataset.lbl=newSup.name;
+    el.innerHTML=newSup.name;
+    el.onclick=function(){ssPick('ms-supplier',el);};
+    drop.appendChild(el);
+    ssPick('ms-supplier',el);
+  }
+  toast('Fornecedor adicionado!');
+};
+
 window.openMovModal=function(type){
   var S=window.state;
   var allItems=[];
@@ -1154,8 +1284,8 @@ window.openMovModal=function(type){
     :'';
   var addBtn=(type!=='brinde')?'<button onclick="addMovItem()" style="width:100%;padding:6px;border:1.5px dashed var(--border);border-radius:8px;background:none;cursor:pointer;font-size:12px;color:var(--sub);margin-bottom:10px;font-family:inherit">+ Adicionar produto</button>':'';
   var extra='';
-  if(type==='saida')extra=fg('Cliente',ssHtml('ms-client',clientOpts,'Buscar cliente...','openClientModal()'))+'<div class="grid2">'+fg('Codigo UGC',inp('ms-ugc','text','','Ex: RAY10'))+fg('Desconto %',inp('ms-disc','number','0'))+'</div>';
-  else if(type==='entrada')extra=fg('Fornecedor',ssHtml('ms-supplier',supplierOpts,'Buscar fornecedor...'))
+  if(type==='saida')extra=fg('Cliente',ssHtml('ms-client',clientOpts,'Buscar cliente...','quickAddClient()'))+'<div class="grid2">'+fg('Codigo UGC',inp('ms-ugc','text','','Ex: RAY10'))+fg('Desconto %',inp('ms-disc','number','0'))+'</div>';
+  else if(type==='entrada')extra=fg('Fornecedor',ssHtml('ms-supplier',supplierOpts,'Buscar fornecedor...','quickAddSupplier()'))
     +'<div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">'
     +'<div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--sub)">📦 CALCULADORA DE FRETE</div>'
     +'<div class="grid3">'+fg('Frete BR Total ($)',cinp('ms-frete-br-total',0))+fg('Peso total caixa (kg)',inp('ms-box-weight','number','0','0'))+fg('Frete EUA/un (def. $5,50)',cinp('ms-frete-usa-unit',5.50))+'</div>'
@@ -1625,7 +1755,7 @@ window.exportComprasXLSX=function(listId){
 };
 
 function renderPage(p){
-  const map={dashboard:renderDashboard,livros:renderLivros,movimentos:window.renderMovimentos,kits:window.renderKits,clientes:renderClientes,fornecedores:renderFornecedores,despesas:renderDespesas,relatorios:renderRelatorios,ugc:renderUgc,config:renderConfig,compras:renderCompras};
+  const map={dashboard:renderDashboard,livros:renderLivros,movimentos:window.renderMovimentos,kits:window.renderKits,clientes:renderClientes,fornecedores:renderFornecedores,despesas:renderDespesas,relatorios:renderRelatorios,ugc:renderUgc,config:renderConfig,compras:renderCompras,inventario:renderInventario};
   if(map[p])map[p]();
 }
 
