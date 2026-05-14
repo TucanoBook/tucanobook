@@ -523,6 +523,7 @@ window.renderMovimentos=function(){
       {label:'Unit.',render:function(r){return r.unitPrice>0?BRL(r.unitPrice):'-';}},
       {label:'Total',render:function(r){return '<strong>'+BRL(r.quantity*(r.unitPrice||0))+'</strong>';}},
       {label:'Contato',render:function(r){return r.clientName||r.supplierName||'-';}},
+      {label:'Pedido',render:function(r){return r.orderNum?'<span style="font-size:11px;font-weight:600;color:#6366f1">'+r.orderNum+'</span>'+(r.shippingPaid>0?'<span style="color:#dc2626;font-size:10px;margin-left:4px">🚀$'+r.shippingPaid.toFixed(2)+'</span>':''):'-';}},
       {label:'UGC',render:function(r){return r.ugcCode?'<span class="badge badge-indigo" style="font-size:10px">'+r.ugcCode+'</span>':'';}},
       {label:'',render:function(r){return '<div style="display:flex;gap:4px"><button class="btn btn-sm" onclick="openEditMov(this.dataset.id)" data-id="'+r.id+'">✏️</button><button class="btn btn-sm btn-red" onclick="delMov(this.dataset.id)" data-id="'+r.id+'">🗑️</button></div>';}}
     ],sorted,'Nenhuma movimentacao registrada.')
@@ -556,6 +557,61 @@ window.saveMov=function(){
   window.state.movements.push({id:genId(),type,bookId,bookTitle:book.title,quantity:qty,unitPrice:netPrice,grossUnitPrice:price,freightCost,freightImport,freightBR,supplierId,supplierName:supplier?.name||'',clientId,clientName:client?.name||'',ugcCode,discountPct:discPct,shopifyFee,date:document.getElementById('mov-date').value,notes:document.getElementById('mov-notes').value});
   window.state.books=window.state.books.map(b=>b.id===bookId?{...b,stock:b.stock+(type==='entrada'?qty:-qty)}:b); // brinde also deducts
   saveState('movements');saveState('books');toast(type==='entrada'?'Entrada registrada!':'Saída registrada!');renderMovimentos();
+};
+
+window.delMov=function(id){
+  if(!confirm('Excluir este lançamento? O estoque será revertido.'))return;
+  var mov=window.state.movements.find(function(m){return m.id===id;});
+  if(!mov)return;
+  var isKit=mov.bookId&&mov.bookId.startsWith('kit-');
+  var kid=isKit?mov.bookId.replace('kit-',''):'';
+  if(mov.type==='entrada'){
+    if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:Math.max(0,(k.stock||0)-mov.quantity)}):k;});
+    else window.state.books=window.state.books.map(function(b){return b.id===mov.bookId?Object.assign({},b,{stock:Math.max(0,b.stock-mov.quantity)}):b;});
+  }else{
+    if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)+mov.quantity}):k;});
+    else window.state.books=window.state.books.map(function(b){return b.id===mov.bookId?Object.assign({},b,{stock:b.stock+mov.quantity}):b;});
+  }
+  window.state.movements=window.state.movements.filter(function(m){return m.id!==id;});
+  saveState('movements');saveState('books');saveState('kits');
+  renderMovimentos();toast('Lançamento excluído. Estoque revertido.','error');
+};
+
+window.openEditMov=function(id){
+  var mov=window.state.movements.find(function(m){return m.id===id;});
+  if(!mov)return;
+  var html='<div style="display:flex;flex-direction:column;gap:12px">'
+    +'<div><label style="font-size:12px;font-weight:600;color:var(--sub)">Produto</label>'
+    +'<div style="padding:8px 12px;background:#f8fafc;border-radius:8px;font-size:13px">'+mov.bookTitle+'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +'<div><label style="font-size:12px;font-weight:600;color:var(--sub)">Data</label>'
+    +'<input type="date" id="em-date" value="'+(mov.date||today())+'" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box"></div>'
+    +'<div><label style="font-size:12px;font-weight:600;color:var(--sub)">Quantidade</label>'
+    +'<input type="number" id="em-qty" value="'+(mov.quantity||1)+'" min="1" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box"></div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +'<div><label style="font-size:12px;font-weight:600;color:var(--sub)">Preço unit.</label>'
+    +'<input type="text" id="em-price" value="'+(mov.unitPrice||0).toFixed(2)+'" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box"></div>'
+    +'<div><label style="font-size:12px;font-weight:600;color:var(--sub)">Nº Pedido / Obs</label>'
+    +'<input type="text" id="em-notes" value="'+(mov.notes||'')+'" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box"></div>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--sub);background:#fef9c3;padding:8px 12px;border-radius:8px">⚠️ Editar não reverte o estoque. Para corrigir estoque, exclua e relance.</div>'
+    +'<div style="display:flex;gap:10px;justify-content:flex-end">'
+    +'<button class="btn btn-gray" onclick="closeModal()">Cancelar</button>'
+    +'<button class="btn" onclick="saveEditMov(\''+id+'\')">💾 Salvar</button>'
+    +'</div></div>';
+  openModal('Editar Lançamento',html);
+};
+
+window.saveEditMov=function(id){
+  var date=document.getElementById('em-date').value;
+  var qty=parseInt(document.getElementById('em-qty').value)||1;
+  var price=parseFloat(document.getElementById('em-price').value)||0;
+  var notes=document.getElementById('em-notes').value;
+  window.state.movements=window.state.movements.map(function(m){
+    return m.id===id?Object.assign({},m,{date:date,quantity:qty,unitPrice:price,notes:notes}):m;
+  });
+  saveState('movements');closeModal();renderMovimentos();toast('Lançamento atualizado!');
 };
 
 // ── KITS ─────────────────────────────────────────────────────────────────
@@ -1265,7 +1321,10 @@ window.importShopifyCSV=function(input){
         var oName=gc(cells,'Name');if(!oName)continue;
         if(!orders[oName]){
           var tot=parseFloat(gc(cells,'Total'))||0;
-          orders[oName]={name:oName,date:(gc(cells,'Paid at')||gc(cells,'Created at')).slice(0,10),discCode:gc(cells,'Discount Code'),total:tot,shopifyFee:tot>0?+(tot*0.029+0.30).toFixed(2):0,items:[]};
+          var ship=parseFloat(gc(cells,'Shipping'))||0;
+          var shipMethod=gc(cells,'Shipping Method')||'';
+          var custName=gc(cells,'Billing Name')||gc(cells,'Shipping Name')||'';
+          orders[oName]={name:oName,date:(gc(cells,'Paid at')||gc(cells,'Created at')).slice(0,10),discCode:gc(cells,'Discount Code'),total:tot,shipping:ship,shippingMethod:shipMethod,customerName:custName,shopifyFee:tot>0?+(tot*0.029+0.30).toFixed(2):0,items:[]};
         }
         var iN=gc(cells,'Lineitem name'),iQ=parseInt(gc(cells,'Lineitem quantity'))||1,iP=parseFloat(gc(cells,'Lineitem price'))||0,iD=parseFloat(gc(cells,'Lineitem discount'))||0;
         if(iN)orders[oName].items.push({iN:iN,iQ:iQ,iP:iP,iD:iD});
@@ -1273,30 +1332,39 @@ window.importShopifyCSV=function(input){
       var rows=[];
       Object.values(orders).forEach(function(o){
         var feeApplied=false;
+        var isExpress=o.shipping>0&&/priority|express|fastest/i.test(o.shippingMethod);
         o.items.forEach(function(item){
           var kid=findKitShopify(item.iN);
           var kit=kid?window.state.kits.find(function(k){return k.id===kid;}):null;
           var net=item.iP-(item.iD/item.iQ||0);
-          rows.push({order:o.name,date:o.date,discCode:o.discCode,iN:item.iN,iQ:item.iQ,iP:item.iP,iD:item.iD,net:net,kid:kid,kitName:kit?kit.name:'Nao mapeado',fee:feeApplied?0:o.shopifyFee});
+          rows.push({order:o.name,date:o.date,discCode:o.discCode,iN:item.iN,iQ:item.iQ,iP:item.iP,iD:item.iD,net:net,kid:kid,kitName:kit?kit.name:'Nao mapeado',fee:feeApplied?0:o.shopifyFee,shipping:feeApplied?0:o.shipping,shippingMethod:o.shippingMethod,customerName:o.customerName,isExpress:isExpress&&!feeApplied});
           feeApplied=true;
         });
       });
       var mapped=rows.filter(function(r){return r.kid;}),unmapped=rows.filter(function(r){return !r.kid&&r.iN.toLowerCase().indexOf('embalagem')<0;});
       var totalRev=rows.reduce(function(a,r){return a+r.net*r.iQ;},0);
+      var expressOrders=rows.filter(function(r){return r.isExpress;});
       var rowsHtml='';
       rows.forEach(function(r){
-        rowsHtml+='<tr style="border-bottom:1px solid #f1f5f9">'
-          +'<td style="padding:5px 8px;font-weight:600">'+r.order+'</td>'
-          +'<td style="padding:5px 8px">'+r.date+'</td>'
-          +'<td style="padding:5px 8px"><span class="badge '+(r.kid?'badge-green':'badge-red')+'">'+r.kitName+'</span></td>'
-          +'<td style="padding:5px 8px;text-align:center">'+r.iQ+'</td>'
-          +'<td style="padding:5px 8px;text-align:right">$'+r.net.toFixed(2)+'</td></tr>';
+        var expressBadge=r.isExpress?'<span style="background:#dc2626;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;margin-left:4px">🚀 EXPRESSO $'+r.shipping.toFixed(2)+'</span>':'';
+        rowsHtml+='<tr style="border-bottom:1px solid #f1f5f9'+(r.isExpress?';background:#fff5f5':'')+'">'+
+          '<td style="padding:5px 8px;font-weight:600">'+r.order+expressBadge+'</td>'+
+          '<td style="padding:5px 8px;font-size:11px">'+r.customerName+'</td>'+
+          '<td style="padding:5px 8px">'+r.date+'</td>'+
+          '<td style="padding:5px 8px"><span class="badge '+(r.kid?'badge-green':'badge-red')+'">'+r.kitName+'</span></td>'+
+          '<td style="padding:5px 8px;text-align:center">'+r.iQ+'</td>'+
+          '<td style="padding:5px 8px;text-align:right">$'+r.net.toFixed(2)+'</td></tr>';
       });
-      var html='<div class="alert '+(unmapped.length?'alert-amber':'alert-green')+'" style="margin-bottom:12px">'
+      var expressAlert=expressOrders.length?'<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px">'
+        +'<strong style="color:#dc2626">🚨 Frete Expresso detectado!</strong><br>'
+        +expressOrders.map(function(r){return r.order+' — '+r.customerName+': <strong>$'+r.shipping.toFixed(2)+'</strong> ('+r.shippingMethod+')';}).join('<br>')
+        +'<br><span style="color:#7f1d1d">Verifique o custo real do frete antes de confirmar.</span></div>':'';
+      var html=expressAlert
+        +'<div class="alert '+(unmapped.length?'alert-amber':'alert-green')+'" style="margin-bottom:12px">'
         +(mapped.length)+' mapeados | '+unmapped.length+' sem mapeamento | Total: <strong>$'+totalRev.toFixed(2)+'</strong></div>'
         +(unmapped.length?'<div class="alert alert-amber" style="font-size:11px;margin-bottom:12px">Nao mapeados: '+[...new Set(unmapped.map(function(r){return r.iN;}))].slice(0,3).join(', ')+'</div>':'')
         +'<div style="max-height:260px;overflow-y:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:12px">'
-        +'<thead><tr style="background:#f8fafc"><th style="padding:6px 8px">Pedido</th><th>Data</th><th>Kit</th><th>Qtd</th><th>Preco</th></tr></thead>'
+        +'<thead><tr style="background:#f8fafc"><th style="padding:6px 8px">Pedido</th><th>Cliente</th><th>Data</th><th>Kit</th><th>Qtd</th><th>Preco</th></tr></thead>'
         +'<tbody>'+rowsHtml+'</tbody></table></div>'
         +'<div style="display:flex;gap:10px;justify-content:flex-end">'
         +'<button class="btn btn-gray" onclick="closeModal()">Cancelar</button>'
@@ -1318,8 +1386,9 @@ window.confirmShopifyImport=function(){
     var fee=seenO[r.order]?0:r.fee;seenO[r.order]=true;
     window.state.movements.push({id:genId(),type:'saida',bookId:'kit-'+r.kid,bookTitle:'Kit: '+kit.name,
       quantity:r.iQ,unitPrice:r.net,grossUnitPrice:r.iP,freightCost:0,freightImport:0,freightBR:0,
-      clientId:'',clientName:'',ugcCode:r.discCode||'',discountPct:r.iD>0?+(r.iD/r.iP/r.iQ*100).toFixed(1):0,
-      shopifyFee:fee,cogs:(kit.costPrice||0)*r.iQ,date:r.date,notes:'Shopify '+r.order,source:'shopify'});
+      clientId:'',clientName:r.customerName||'',ugcCode:r.discCode||'',discountPct:r.iD>0?+(r.iD/r.iP/r.iQ*100).toFixed(1):0,
+      shopifyFee:fee,shippingPaid:r.shipping||0,shippingMethod:r.shippingMethod||'',
+      cogs:(kit.costPrice||0)*r.iQ,date:r.date,orderNum:r.order,notes:'Shopify '+r.order+(r.customerName?' — '+r.customerName:''),source:'shopify'});
     window.state.kits=window.state.kits.map(function(k){return k.id===r.kid?Object.assign({},k,{stock:Math.max(0,(k.stock||0)-r.iQ)}):k;});
     imported++;
   });
