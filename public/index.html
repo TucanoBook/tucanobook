@@ -495,53 +495,44 @@ let movFilter='all',movType='saida';
 window.setMovFilter=function(f){movFilter=f;renderMovimentos();};
 window.setDespFilter=function(f){despFilter=f;renderDespesas();};
 window.renderMovimentos=function(){
-  const sorted=[...window.state.movements].filter(m=>movFilter==='all'||m.type===movFilter).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const supplierOpts=window.state.suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
-  const clientOpts=window.state.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  document.getElementById('content').innerHTML=`
-    <div style="display:grid;grid-template-columns:340px 1fr;gap:14px">
-      <div class="card">
-        <div style="font-size:14px;font-weight:700;margin-bottom:16px">Registrar Movimentação</div>
-        <div class="fg"><label>Tipo *</label><div class="type-toggle">
-          <button id="tb-saida" class="type-btn" style="border:2px solid #ef4444;background:#fee2e2;color:#dc2626" onclick="setMovType('saida')">↓ Saída (Venda)</button>
-          <button id="tb-entrada" class="type-btn" style="border:2px solid var(--border);background:#fff;color:var(--sub)" onclick="setMovType('entrada')">↑ Entrada (Compra)</button>
-        </div></div>
-        <div class="type-toggle" style="grid-template-columns:1fr 1fr 1fr">
-          <button id="tb-brinde" class="type-btn" style="border:2px solid var(--border);background:#fff;color:var(--sub)" onclick="setMovType('brinde')">🎁 Brinde/UGC</button>
-        </div>
-        <input type="hidden" id="mov-type" value="saida">
-        <div class="fg"><label>Livro *</label><select id="mov-book" onchange="autoMovPrice()" style="width:100%"><option value="">Selecione...</option>${window.state.books.map(b=>`<option value="${b.id}">${b.title} (est: ${b.stock})</option>`).join('')}</select></div>
-        <div class="grid2">${fg('Quantidade *',inp('mov-qty','number','','1'))}${fg('Preço Unit. (R$) *',cinp('mov-price',0))}</div>
-        <!-- SAIDA: cliente -->
-        <div id="mov-client-wrap" class="fg"><label>Cliente</label><select id="mov-client" style="width:100%"><option value="">Sem cliente</option>${clientOpts}</select></div>
-        <!-- ENTRADA: fornecedor + frete -->
-        <div id="mov-supplier-wrap" style="display:none">
-          <div class="fg"><label>Fornecedor</label><select id="mov-supplier" style="width:100%"><option value="">Sem fornecedor</option>${supplierOpts}</select></div>
-          ${fg('Custo de Frete (R$)',cinp('mov-frete',0))}
-        </div>
-        ${fg('Data',inp('mov-date','date',today()))}
-        <div id="mov-ugc-wrap">
-          <div class="grid3">
-            ${fg('Código UGC',inp('mov-ugc','text','','Ex: RAY10'))}
-            ${fg('Desconto %',inp('mov-disc','number','0','0'))}
-            ${fg('Taxa Shopify ($)',cinp('mov-shopify',0))}
-          </div>
-        </div>
-        ${fg('Observações',inp('mov-notes','text','','Opcional'))}
-        <div id="mov-total" style="display:none" class="alert alert-green"></div>
-        <button class="btn" style="width:100%;justify-content:center" onclick="saveMov()">✅ Registrar</button>
-      </div>
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-          <span style="font-size:14px;font-weight:700">Histórico (${sorted.length})</span>
-          <div class="filter-tabs"><button class="filter-tab ${movFilter==='all'?'active':''}" onclick="setMovFilter('all')">Todos</button><button class="filter-tab ${movFilter==='entrada'?'active':''}" onclick="setMovFilter('entrada')">Entradas</button><button class="filter-tab ${movFilter==='saida'?'active':''}" onclick="setMovFilter('saida')">Saídas</button></div>
-        </div>
-        ${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Tipo',render:r=>`<span class="badge ${r.type==='entrada'?'badge-green':r.type==='brinde'?'badge-purple':'badge-red'}">${r.type==='entrada'?'↑ Entrada':r.type==='brinde'?'🎁 Brinde':'↓ Saída'}</span>`},{label:'Livro',render:r=>r.bookTitle||'-'},{label:'Qtd',key:'quantity'},{label:'Unit.',render:r=>BRL(r.unitPrice)},{label:'Frete',render:r=>r.freightCost>0?BRL(r.freightCost):'-'},{label:'Total',render:r=>`<strong>${BRL(r.quantity*r.unitPrice+(r.freightCost||0))}</strong>`},{label:'Contato',render:r=>r.supplierName||r.clientName||'-'}],sorted,'Nenhuma movimentação registrada.')}
-      </div>
-    </div>`;
-  initCurrency('.cur');
-  ['mov-qty','mov-price','mov-frete'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',updMovTotal);});
-};
+  var S=window.state;
+  var sorted=S.movements.filter(function(m){return movFilter==='all'||m.type===movFilter;}).sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  var filterBtns='';
+  var _fAll=['all','Todos'];var _fItems=[['all','Todos'],['entrada','Entradas'],['saida','Saidas'],['brinde','Brindes'],['perda','Perdas']];
+  _fItems.forEach(function(f){filterBtns+='<button class="filter-tab '+(movFilter===f[0]?'active':'')+'" data-fv="'+f[0]+'" onclick="setMovFilter(this.dataset.fv)">'+f[1]+'</button>';});
+  var html='<div class="card" style="margin-bottom:12px;padding:11px 18px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center">'
+    +'<div><div style="font-size:13px;font-weight:700">Importar pedidos do Shopify</div>'
+    +'<div style="font-size:11px;color:var(--sub)">Shopify Admin - Orders - Export - CSV</div></div>'
+    +'<label style="cursor:pointer"><div class="btn" style="background:#96bf48;font-size:12px">Importar CSV</div>'
+    +'<input type="file" accept=".csv" onchange="importShopifyCSV(this)" style="display:none"></label></div></div>'
+    +'<div class="action-btns">'
+    +'<div class="action-btn ab-saida" onclick="openMovModal(this.dataset.t)" data-t="saida">'
+    +'<span class="ab-icon">📤</span><span class="ab-label">Saida / Venda</span><span class="ab-sub">Registrar venda</span></div>'
+    +'<div class="action-btn ab-entrada" onclick="openMovModal(this.dataset.t)" data-t="entrada">'
+    +'<span class="ab-icon">📥</span><span class="ab-label">Entrada / Compra</span><span class="ab-sub">Receber estoque</span></div>'
+    +'<div class="action-btn ab-brinde" onclick="openMovModal(this.dataset.t)" data-t="brinde">'
+    +'<span class="ab-icon">🎁</span><span class="ab-label">Brinde / UGC</span><span class="ab-sub">Envio para criador</span></div>'
+    +'<div class="action-btn ab-perda" onclick="openMovModal(this.dataset.t)" data-t="perda">'
+    +'<span class="ab-icon">📉</span><span class="ab-label">Perda / Avaria</span><span class="ab-sub">Produto danificado</span></div>'
+    +'</div>'
+    +'<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">'
+    +'<span style="font-size:14px;font-weight:700">Historico ('+sorted.length+')</span>'
+    +'<div class="filter-tabs">'+filterBtns+'</div></div>'
+    +tbl([
+      {label:'Data',render:function(r){return fmtD(r.date);}},
+      {label:'Tipo',render:function(r){var t={entrada:'badge-green',brinde:'badge-purple',perda:'badge-amber',saida:'badge-red'};var l={entrada:'Entrada',brinde:'Brinde',perda:'Perda',saida:'Saida'};return '<span class="badge '+(t[r.type]||'badge-red')+'">'+(l[r.type]||r.type)+'</span>';}},
+      {label:'Produto',render:function(r){return '<div style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r.bookTitle||'-')+'</div>';}},
+      {label:'Qtd',key:'quantity'},
+      {label:'Unit.',render:function(r){return r.unitPrice>0?BRL(r.unitPrice):'-';}},
+      {label:'Total',render:function(r){return '<strong>'+BRL(r.quantity*(r.unitPrice||0))+'</strong>';}},
+      {label:'Contato',render:function(r){return r.clientName||r.supplierName||'-';}},
+      {label:'UGC',render:function(r){return r.ugcCode?'<span class="badge badge-indigo" style="font-size:10px">'+r.ugcCode+'</span>':'';}},
+      {label:'',render:function(r){return '<div style="display:flex;gap:4px"><button class="btn btn-sm" onclick="openEditMov(this.dataset.id)" data-id="'+r.id+'">✏️</button><button class="btn btn-sm btn-red" onclick="delMov(this.dataset.id)" data-id="'+r.id+'">🗑️</button></div>';}}
+    ],sorted,'Nenhuma movimentacao registrada.')
+    +'</div>';
+  document.getElementById('content').innerHTML=html;
+}
 window.setMovType=function(t){
   movType=t;document.getElementById('mov-type').value=t;
   const s=document.getElementById('tb-saida'),e=document.getElementById('tb-entrada');
