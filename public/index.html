@@ -465,8 +465,6 @@ window.setMovFilter=function(f){movFilter=f;renderMovimentos();};
 window.setDespFilter=function(f){despFilter=f;renderDespesas();};
 window.renderMovimentos=function(){
   const sorted=[...window.state.movements].filter(m=>movFilter==='all'||m.type===movFilter).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const supplierOpts=window.state.suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
-  const clientOpts=window.state.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
   document.getElementById('content').innerHTML=`
     <div class="card" style="margin-bottom:12px;padding:11px 18px">
       <div style="display:flex;justify-content:space-between;align-items:center">
@@ -474,81 +472,317 @@ window.renderMovimentos=function(){
         <label style="cursor:pointer"><div class="btn" style="background:#96bf48;font-size:12px">📥 Importar CSV</div><input type="file" accept=".csv" onchange="importShopifyCSV(this)" style="display:none"></label>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:340px 1fr;gap:14px">
-      <div class="card">
-        <div style="font-size:14px;font-weight:700;margin-bottom:16px">Registrar Movimentação</div>
-        <div class="fg"><label>Tipo *</label><div class="type-toggle">
-          <button id="tb-saida" class="type-btn" style="border:2px solid #ef4444;background:#fee2e2;color:#dc2626" onclick="setMovType('saida')">↓ Saída (Venda)</button>
-          <button id="tb-entrada" class="type-btn" style="border:2px solid var(--border);background:#fff;color:var(--sub)" onclick="setMovType('entrada')">↑ Entrada (Compra)</button>
-        </div></div>
-        <div style="margin-top:8px">
-          <button id="tb-brinde" class="type-btn" style="width:100%;border:2px solid var(--border);background:#fff;color:var(--sub);padding:9px" onclick="setMovType('brinde')">🎁 Brinde / UGC — Envio para Criador</button>
-        </div>
-        <input type="hidden" id="mov-type" value="saida">
-        <div class="fg"><label>Livro *</label><select id="mov-book" onchange="autoMovPrice()" style="width:100%"><option value="">Selecione...</option>${window.state.books.map(b=>`<option value="${b.id}">${b.title} (est: ${b.stock})</option>`).join('')}</select></div>
-        <div class="grid2">${fg('Quantidade *',inp('mov-qty','number','','1'))}${fg('Preço Unit. (R$) *',cinp('mov-price',0))}</div>
-        <!-- SAIDA: cliente -->
-        <div id="mov-client-wrap" class="fg"><label>Cliente</label><select id="mov-client" style="width:100%"><option value="">Sem cliente</option>${clientOpts}</select></div>
-        <!-- ENTRADA: fornecedor + frete -->
-        <div id="mov-supplier-wrap" style="display:none">
-          <div class="fg"><label>Fornecedor</label><select id="mov-supplier" style="width:100%"><option value="">Sem fornecedor</option>${supplierOpts}</select></div>
-          ${fg('Custo de Frete (R$)',cinp('mov-frete',0))}
-        </div>
-        ${fg('Data',inp('mov-date','date',today()))}
-        <div id="mov-ugc-wrap">
-          <div class="grid3">
-            ${fg('Código UGC',inp('mov-ugc','text','','Ex: RAY10'))}
-            ${fg('Desconto %',inp('mov-disc','number','0','0'))}
-            ${fg('Taxa Shopify ($)',cinp('mov-shopify',0))}
-          </div>
-        </div>
-        ${fg('Observações',inp('mov-notes','text','','Opcional'))}
-        <div id="mov-total" style="display:none" class="alert alert-green"></div>
-        <button class="btn" style="width:100%;justify-content:center" onclick="saveMov()">✅ Registrar</button>
+    <div class="action-btns">
+      <div class="action-btn saida" onclick="openMovModal('saida')">
+        <div class="ab-icon">📤</div><div class="ab-label">Saída / Venda</div><div class="ab-sub">Registrar venda ao cliente</div>
       </div>
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-          <span style="font-size:14px;font-weight:700">Histórico (${sorted.length})</span>
-          <div class="filter-tabs"><button class="filter-tab ${movFilter==='all'?'active':''}" onclick="setMovFilter('all')">Todos</button><button class="filter-tab ${movFilter==='entrada'?'active':''}" onclick="setMovFilter('entrada')">Entradas</button><button class="filter-tab ${movFilter==='saida'?'active':''}" onclick="setMovFilter('saida')">Saídas</button></div>
-        </div>
-        ${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Tipo',render:r=>`<span class="badge ${r.type==='entrada'?'badge-green':r.type==='brinde'?'badge-purple':'badge-red'}">${r.type==='entrada'?'↑ Entrada':r.type==='brinde'?'🎁 Brinde':'↓ Saída'}</span>`},{label:'Livro',render:r=>r.bookTitle||'-'},{label:'Qtd',key:'quantity'},{label:'Unit.',render:r=>BRL(r.unitPrice)},{label:'Frete',render:r=>r.freightCost>0?BRL(r.freightCost):'-'},{label:'Total',render:r=>`<strong>${BRL(r.quantity*r.unitPrice+(r.freightCost||0))}</strong>`},{label:'Contato',render:r=>r.supplierName||r.clientName||'-'}],sorted,'Nenhuma movimentação registrada.')}
+      <div class="action-btn entrada" onclick="openMovModal('entrada')">
+        <div class="ab-icon">📥</div><div class="ab-label">Entrada / Compra</div><div class="ab-sub">Receber novo estoque</div>
       </div>
+      <div class="action-btn brinde" onclick="openMovModal('brinde')">
+        <div class="ab-icon">🎁</div><div class="ab-label">Brinde / UGC</div><div class="ab-sub">Envio para criador</div>
+      </div>
+      <div class="action-btn perda" onclick="openMovModal('perda')">
+        <div class="ab-icon">📉</div><div class="ab-label">Perda / Avaria</div><div class="ab-sub">Produto danificado</div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <span style="font-size:14px;font-weight:700">Histórico (${sorted.length})</span>
+        <div class="filter-tabs">
+          <button class="filter-tab ${movFilter==='all'?'active':''}" onclick="setMovFilter('all')">Todos</button>
+          <button class="filter-tab ${movFilter==='entrada'?'active':''}" onclick="setMovFilter('entrada')">Entradas</button>
+          <button class="filter-tab ${movFilter==='saida'?'active':''}" onclick="setMovFilter('saida')">Saídas</button>
+          <button class="filter-tab ${movFilter==='brinde'?'active':''}" onclick="setMovFilter('brinde')">Brindes</button>
+          <button class="filter-tab ${movFilter==='perda'?'active':''}" onclick="setMovFilter('perda')">Perdas</button>
+        </div>
+      </div>
+      ${tbl([
+        {label:'Data',render:r=>fmtD(r.date)},
+        {label:'Tipo',render:r=>{const t={entrada:'badge-green',brinde:'badge-purple',perda:'badge-amber',saida:'badge-red'};const l={entrada:'↑ Entrada',brinde:'🎁 Brinde',perda:'📉 Perda',saida:'↓ Saída'};return`<span class="badge ${t[r.type]||'badge-red'}">${l[r.type]||r.type}</span>`;}},
+        {label:'Produto',render:r=>`<div style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.bookTitle||'-'}</div>`},
+        {label:'Qtd',key:'quantity'},
+        {label:'Unit.',render:r=>r.unitPrice>0?BRL(r.unitPrice):'-'},
+        {label:'Total',render:r=>`<strong>${BRL(r.quantity*(r.unitPrice||0))}</strong>`},
+        {label:'Contato',render:r=>r.clientName||r.supplierName||'-'},
+        {label:'UGC',render:r=>r.ugcCode?`<span class="badge badge-indigo" style="font-size:10px">${r.ugcCode}</span>`:''},
+        {label:'',render:r=>`<button class="btn btn-sm btn-red" onclick="delMov('${r.id}')">🗑️</button>`}
+      ],sorted,'Nenhuma movimentação registrada.')}
     </div>`;
-  initCurrency('.cur');
-  ['mov-qty','mov-price','mov-frete'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',updMovTotal);});
 };
-window.setMovType=function(t){
-  movType=t;document.getElementById('mov-type').value=t;
-  const s=document.getElementById('tb-saida'),e=document.getElementById('tb-entrada');
-  const cw=document.getElementById('mov-client-wrap'),sw=document.getElementById('mov-supplier-wrap');
-  if(t==='saida'){s.style.cssText='border:2px solid #ef4444;background:#fee2e2;color:#dc2626';e.style.cssText='border:2px solid var(--border);background:#fff;color:var(--sub)';cw.style.display='';sw.style.display='none';}
-  else{e.style.cssText='border:2px solid #10b981;background:#dcfce7;color:#166534';s.style.cssText='border:2px solid var(--border);background:#fff;color:var(--sub)';cw.style.display='none';sw.style.display='';}
+
+window.delMov=function(id){
+  if(!confirm('Excluir movimentação? O estoque será revertido.'))return;
+  const m=window.state.movements.find(x=>x.id===id);
+  if(m){
+    const isKit=m.bookId?.startsWith('kit-'),kid=isKit?m.bookId.replace('kit-',''):'';
+    if(m.type==='entrada'){
+      if(isKit)window.state.kits=window.state.kits.map(k=>k.id===kid?{...k,stock:Math.max(0,(k.stock||0)-m.quantity)}:k);
+      else window.state.books=window.state.books.map(b=>b.id===m.bookId?{...b,stock:Math.max(0,b.stock-m.quantity)}:b);
+    } else {
+      if(isKit)window.state.kits=window.state.kits.map(k=>k.id===kid?{...k,stock:(k.stock||0)+m.quantity}:k);
+      else window.state.books=window.state.books.map(b=>b.id===m.bookId?{...b,stock:b.stock+m.quantity}:b);
+    }
+  }
+  window.state.movements=window.state.movements.filter(x=>x.id!==id);
+  saveState('movements');saveState('books');saveState('kits');renderMovimentos();toast('Removido.');
 };
-window.autoMovPrice=function(){const b=window.state.books.find(b=>b.id===document.getElementById('mov-book').value);if(b){const t=document.getElementById('mov-type').value;document.getElementById('mov-price').value=(t==='saida'?b.salePrice:b.costPrice).toFixed(2);}updMovTotal();};
-function updMovTotal(){const q=parseCur(document.getElementById('mov-qty')?.value),p=parseCur(document.getElementById('mov-price')?.value),f=parseCur(document.getElementById('mov-frete')?.value),el=document.getElementById('mov-total');if(el&&q>0&&p>0){el.style.display='block';el.textContent=`💰 Subtotal: ${BRL(q*p)}${f>0?`  +  Frete: ${BRL(f)}  =  ${BRL(q*p+f)}`:''}`;}}
-window.saveMov=function(){
-  const type=document.getElementById('mov-type').value,bookId=document.getElementById('mov-book').value;
-  const qty=parseInt(document.getElementById('mov-qty').value)||0,price=parseCur(document.getElementById('mov-price').value);
-  if(!bookId||!qty||!price)return alert('Preencha livro, quantidade e preço.');
-  const book=window.state.books.find(b=>b.id===bookId);
-  if((type==='saida'||type==='brinde')&&book.stock<qty)return alert(`Estoque insuficiente! Disponível: ${book.stock}`);
-  const freightImport=parseCur(document.getElementById('mov-frete-import')?.value)||0;const freightBR=parseCur(document.getElementById('mov-frete-br')?.value)||0;const freightCost=freightImport+freightBR;
-  const supplierId=document.getElementById('mov-supplier')?.value||'';
-  const supplier=supplierId?window.state.suppliers.find(s=>s.id===supplierId):null;
-  const clientId=document.getElementById('mov-client')?.value||'';
+
+// ── OPEN MOVEMENT MODAL ──────────────────────────────────────────────────
+window.openMovModal=function(type){
+  const allItems=[
+    ...window.state.kits.map(k=>({value:`kit-${k.id}`,label:`🎁 ${k.name} (est:${k.stock||0})`})),
+    ...window.state.books.map(b=>({value:b.id,label:`📚 ${b.title} (est:${b.stock})`}))
+  ];
+  const clientOpts=window.state.clients.map(c=>({value:c.id,label:`${c.name}${c.email?' — '+c.email:''}`}));
+  const supplierOpts=window.state.suppliers.map(s=>({value:s.id,label:s.name}));
+  const titles={saida:'📤 Registrar Saída / Venda',entrada:'📥 Registrar Entrada / Compra',brinde:'🎁 Registrar Brinde / UGC',perda:'📉 Registrar Perda / Avaria'};
+  const firstRow=`<div class="item-row" data-idx="0"><div>${ssHtml('ms-book-0',allItems,'Buscar produto ou kit...')}</div><input type="number" id="ms-qty-0" value="1" min="1" oninput="calcMovTotal()" style="padding:7px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;text-align:center"><div style="position:relative"><span style="position:absolute;left:7px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:11px">$</span><input type="number" id="ms-price-0" step="0.01" placeholder="0.00" oninput="calcMovTotal()" style="padding:6px 6px 6px 18px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;width:100%"></div><div></div></div>`;
+  const addBtn=type!=='brinde'?`<button onclick="addItemRow()" style="width:100%;padding:6px;border:1.5px dashed var(--border);border-radius:8px;background:none;cursor:pointer;font-size:12px;color:var(--sub);margin-bottom:10px;font-family:inherit">+ Adicionar produto</button>`:'';
+
+  let extra='';
+  if(type==='saida')  extra=`<div class="fg"><label>Cliente</label>${ssHtml('ms-client',clientOpts,'Buscar cliente...')}</div><div class="grid2">${fg('Código UGC',inp('ms-ugc','text','','Ex: RAY10'))}${fg('Desconto %',inp('ms-disc','number','0'))}</div>`;
+  if(type==='entrada')extra=`<div class="fg"><label>Fornecedor</label>${ssHtml('ms-supplier',supplierOpts,'Buscar fornecedor...')}</div><div class="grid2">${fg('Frete Import. EUA ($)',cinp('ms-frete-import',0))}${fg('Frete no Brasil ($)',cinp('ms-frete-br',0))}</div>`;
+  if(type==='brinde') extra=`<div class="grid2">${fg('Criador (nome)',inp('ms-ugc-name','text','','Nome do criador'))}${fg('Código UGC',inp('ms-ugc','text','','Ex: RAY10'))}</div>${fg('Frete no Brasil ($)',cinp('ms-frete-br',0))}`;
+  if(type==='perda')  extra=`${fg('Motivo',inp('ms-motivo','text','','Ex: Produto danificado'))}`;
+
+  openModal(titles[type]||type,`
+    <input type="hidden" id="ms-type" value="${type}">
+    <div style="font-size:11px;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Produtos / Kits</div>
+    <div class="item-rows" id="item-rows-wrap">${firstRow}</div>
+    ${addBtn}
+    <div class="item-total-bar" id="ms-total-bar" style="display:none"></div>
+    ${extra}
+    ${fg('Data',inp('ms-date','date',today()))}
+    ${fg('Observações',inp('ms-notes','text','','Opcional'))}
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">
+      <button class="btn btn-gray" onclick="closeModal()">Cancelar</button>
+      <button class="btn" onclick="saveMov2()">✅ Registrar</button>
+    </div>`,true);
+};
+
+window.saveMov2=function(){
+  const type=document.getElementById('ms-type')?.value;
+  const items=collectMovItems();
+  if(!items.length)return alert('Adicione pelo menos um produto.');
+  const date=document.getElementById('ms-date')?.value||today();
+  const notes=document.getElementById('ms-notes')?.value||'';
+  const clientId=document.getElementById('ms-client')?.value||'';
   const client=clientId?window.state.clients.find(c=>c.id===clientId):null;
-  const ugcCode=document.getElementById('mov-ugc')?.value||'';
-  const discPct=parseFloat(document.getElementById('mov-disc')?.value)||0;
-  const shopifyFee=parseCur(document.getElementById('mov-shopify')?.value)||0;
-  const netPrice=discPct>0?price*(1-discPct/100):price;
-  window.state.movements.push({id:genId(),type,bookId,bookTitle:book.title,quantity:qty,unitPrice:netPrice,grossUnitPrice:price,freightCost,freightImport,freightBR,supplierId,supplierName:supplier?.name||'',clientId,clientName:client?.name||'',ugcCode,discountPct:discPct,shopifyFee,date:document.getElementById('mov-date').value,notes:document.getElementById('mov-notes').value});
-  window.state.books=window.state.books.map(b=>b.id===bookId?{...b,stock:b.stock+(type==='entrada'?qty:-qty)}:b); // brinde also deducts
-  saveState('movements');saveState('books');toast(type==='entrada'?'Entrada registrada!':'Saída registrada!');renderMovimentos();
+  const supplierId=document.getElementById('ms-supplier')?.value||'';
+  const supplier=supplierId?window.state.suppliers.find(s=>s.id===supplierId):null;
+  const ugcCode=(document.getElementById('ms-ugc')?.value||document.getElementById('ms-ugc-name')?.value||'').trim();
+  const discPct=parseFloat(document.getElementById('ms-disc')?.value)||0;
+  const freteImport=parseCur(document.getElementById('ms-frete-import')?.value)||0;
+  const freteBR=parseCur(document.getElementById('ms-frete-br')?.value)||0;
+  const motivo=document.getElementById('ms-motivo')?.value||'';
+  for(const item of items){
+    const isKit=item.bookId?.startsWith('kit-');
+    const kid=isKit?item.bookId.replace('kit-',''):'';
+    const kit=kid?window.state.kits.find(k=>k.id===kid):null;
+    const book=!isKit?window.state.books.find(b=>b.id===item.bookId):null;
+    const stock=isKit?(kit?.stock||0):(book?.stock||0);
+    if((type==='saida'||type==='brinde'||type==='perda')&&stock<item.qty)
+      return alert(`Estoque insuficiente para "${item.bookTitle}"!\nDisponível: ${stock}`);
+    const net=discPct>0?item.price*(1-discPct/100):item.price;
+    const cogs=isKit?(kit?.costPrice||0)*item.qty:(book?.costPrice||0)*item.qty;
+    window.state.movements.push({
+      id:genId(),type,bookId:item.bookId,bookTitle:item.bookTitle,
+      quantity:item.qty,unitPrice:type==='entrada'?item.price:net,grossUnitPrice:item.price,
+      freightCost:freteBR+freteImport,freightImport:freteImport,freightBR:freteBR,
+      supplierId,supplierName:supplier?.name||'',clientId,clientName:client?.name||'',
+      ugcCode,discountPct:discPct,shopifyFee:0,cogs,date,
+      notes:notes||(motivo?`Perda: ${motivo}`:''),source:'manual',
+    });
+    if(type==='entrada'){
+      if(isKit)window.state.kits=window.state.kits.map(k=>k.id===kid?{...k,stock:(k.stock||0)+item.qty}:k);
+      else window.state.books=window.state.books.map(b=>b.id===item.bookId?{...b,stock:b.stock+item.qty}:b);
+    } else {
+      if(isKit)window.state.kits=window.state.kits.map(k=>k.id===kid?{...k,stock:Math.max(0,(k.stock||0)-item.qty)}:k);
+      else window.state.books=window.state.books.map(b=>b.id===item.bookId?{...b,stock:Math.max(0,b.stock-item.qty)}:b);
+    }
+  }
+  saveState('movements');saveState('books');saveState('kits');
+  closeModal();toast(`${items.length} item(s) registrado(s)!`);renderMovimentos();
 };
+
+// ── STOCK ADJUSTMENT ─────────────────────────────────────────────────────
+window.openStockAdjust=function(){
+  openModal('📦 Ajuste de Estoque — Contagem Física',`
+    <div class="alert alert-amber" style="font-size:12px;margin-bottom:12px">Digite a quantidade física contada. O sistema registra a diferença automaticamente.</div>
+    <div style="max-height:420px;overflow-y:auto">
+      <div style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;margin-bottom:8px">🎁 Kits Prontos</div>
+      ${window.state.kits.map(k=>`<div style="display:grid;grid-template-columns:1fr 80px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9">
+        <div style="font-size:12px;font-weight:500">${k.name}</div>
+        <input type="number" class="adj-input" data-id="kit-${k.id}" data-cur="${k.stock||0}" value="${k.stock||0}" min="0" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;text-align:center;width:100%">
+      </div>`).join('')}
+      <div style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;margin:14px 0 8px">📦 Componentes</div>
+      ${window.state.books.map(b=>`<div style="display:grid;grid-template-columns:1fr 80px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9">
+        <div style="font-size:12px">${b.title}</div>
+        <input type="number" class="adj-input" data-id="${b.id}" data-cur="${b.stock||0}" value="${b.stock||0}" min="0" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;text-align:center;width:100%">
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+      <button class="btn btn-gray" onclick="closeModal()">Cancelar</button>
+      <button class="btn" onclick="applyStockAdjust()">✅ Aplicar Ajuste</button>
+    </div>`,true);
+};
+window.applyStockAdjust=function(){
+  let changed=0;
+  document.querySelectorAll('.adj-input').forEach(inp=>{
+    const id=inp.dataset.id,cur=parseInt(inp.dataset.cur)||0,novo=parseInt(inp.value)||0,diff=novo-cur;
+    if(diff===0)return;
+    const isKit=id.startsWith('kit-'),kid=isKit?id.replace('kit-',''):'';
+    const type=diff>0?'entrada':'perda';
+    const title=isKit?(window.state.kits.find(k=>k.id===kid)?.name||id):(window.state.books.find(b=>b.id===id)?.title||id);
+    window.state.movements.push({id:genId(),type,bookId:isKit?`kit-${kid}`:id,bookTitle:title,quantity:Math.abs(diff),unitPrice:0,date:today(),notes:`Ajuste físico: ${cur}→${novo}`,source:'adjust'});
+    if(isKit)window.state.kits=window.state.kits.map(k=>k.id===kid?{...k,stock:novo}:k);
+    else window.state.books=window.state.books.map(b=>b.id===id?{...b,stock:novo}:b);
+    changed++;
+  });
+  if(!changed)return alert('Nenhuma diferença encontrada.');
+  saveState('movements');saveState('books');saveState('kits');closeModal();toast(`${changed} ajuste(s) aplicado(s)!`);
+};
+
+// ── SHOPPING LIST WITH COMPONENTS ────────────────────────────────────────
+window.openShoppingList=function(){
+  const kits=window.state.kits;
+  let rows=kits.map(k=>`<div style="display:grid;grid-template-columns:1fr 70px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #f1f5f9">
+    <div style="font-size:12px;font-weight:500">${k.name} <span style="color:var(--sub)">(est: ${k.stock||0})</span></div>
+    <input type="number" class="sl-qty" data-kid="${k.id}" value="0" min="0" oninput="calcShoppingList()" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;text-align:center;width:100%">
+  </div>`).join('');
+  openModal('🛒 Lista de Compras — Calcular Componentes',`
+    <div class="alert alert-blue" style="font-size:12px;margin-bottom:12px">Digite quantos kits quer montar/repor. O sistema calcula os componentes necessários.</div>
+    <div style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Qtd de kits que deseja ter disponíveis:</div>
+    <div style="max-height:250px;overflow-y:auto;margin-bottom:14px">${rows}</div>
+    <div id="sl-result"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">
+      <button class="btn btn-gray" onclick="closeModal()">Fechar</button>
+    </div>`,true);
+  calcShoppingList();
+};
+window.calcShoppingList=function(){
+  const kits=window.state.kits;const books=window.state.books;
+  const needed={};
+  document.querySelectorAll('.sl-qty').forEach(inp=>{
+    const qty=parseInt(inp.value)||0;if(!qty)return;
+    const kit=kits.find(k=>k.id===inp.dataset.kid);if(!kit)return;
+    for(const item of (kit.items||[])){
+      needed[item.bookId]=(needed[item.bookId]||0)+item.quantity*qty;
+    }
+  });
+  const el=document.getElementById('sl-result');if(!el)return;
+  if(!Object.keys(needed).length){el.innerHTML='';return;}
+  const rows=Object.entries(needed).map(([bid,need])=>{
+    const b=books.find(x=>x.id===bid);if(!b)return'';
+    const have=b.stock||0,buy=Math.max(0,need-have);
+    return`<tr><td style="padding:6px 10px;font-size:12px">${b.title}</td><td style="padding:6px 10px;text-align:center;font-size:12px">${have}</td><td style="padding:6px 10px;text-align:center;font-size:12px">${need}</td><td style="padding:6px 10px;text-align:center;font-size:12px;font-weight:600;color:${buy>0?'#ef4444':'#10b981'}">${buy>0?buy:'✅'}</td></tr>`;
+  }).join('');
+  el.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Componentes necessários:</div>
+  <table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f8fafc"><th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--sub)">Componente</th><th style="padding:6px 10px;text-align:center;font-size:11px;color:var(--sub)">Em estoque</th><th style="padding:6px 10px;text-align:center;font-size:11px;color:var(--sub)">Necessário</th><th style="padding:6px 10px;text-align:center;font-size:11px;color:var(--sub)">Comprar</th></tr></thead><tbody>${rows}</tbody></table>`;
+};
+
+// ── COST CALCULATOR (freight + packaging → per-kit COGS) ─────────────────
+window.openCostCalc=function(){
+  const kits=window.state.kits;
+  openModal('🧮 Calculadora de Custo por Kit',`
+    <div style="font-size:12px;color:var(--sub);margin-bottom:14px">Calcule o custo real por kit incluindo frete rateado pelo peso e embalagem.</div>
+    <div class="grid2">
+      ${fg('Preço total da compra (BRL)',inp('cc-purchase','number','0','Ex: 850.00'))}
+      ${fg('Cotação BRL→USD (R$ por $1)',inp('cc-rate','number','5.70','Ex: 5.70'))}
+    </div>
+    <div style="font-size:12px;font-weight:600;color:var(--sub);text-transform:uppercase;margin:10px 0 6px">📦 Frete Internacional (Brasil → EUA)</div>
+    <div class="grid3">
+      ${fg('Peso total da caixa (kg)',inp('cc-box-weight','number','0','Ex: 12.5'))}
+      ${fg('Custo total do frete (USD)',inp('cc-freight-intl','number','0','Ex: 180.00'))}
+      ${fg('Custo embalagem total (USD)',inp('cc-packaging','number','0','Ex: 25.00'))}
+    </div>
+    <div style="font-size:12px;font-weight:600;color:var(--sub);text-transform:uppercase;margin:10px 0 6px">🚚 Frete Doméstico EUA (por unidade)</div>
+    <div class="grid2">
+      <div class="fg"><label>Padrão por kit (USD)</label><div style="display:flex;gap:8px;align-items:center"><input type="number" id="cc-us-freight" value="5.50" step="0.01" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none"><label style="font-size:12px;color:var(--sub);white-space:nowrap"><input type="checkbox" id="cc-us-default" checked onchange="document.getElementById('cc-us-freight').disabled=this.checked;if(this.checked)document.getElementById('cc-us-freight').value=5.50"> Usar $5,50</label></div></div>
+      <div></div>
+    </div>
+    <div style="font-size:12px;font-weight:600;color:var(--sub);text-transform:uppercase;margin:10px 0 6px">📦 Kits incluídos neste envio</div>
+    <div style="max-height:220px;overflow-y:auto;margin-bottom:10px">
+      ${kits.map(k=>`<div style="display:grid;grid-template-columns:1fr 80px 80px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #f1f5f9">
+        <div style="font-size:12px">${k.name}</div>
+        <input type="number" class="cc-qty" data-kid="${k.id}" placeholder="Qtd" min="0" value="0" oninput="calcCosts()" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;text-align:center">
+        <input type="number" class="cc-wt" data-kid="${k.id}" placeholder="Peso kg" step="0.01" value="0" oninput="calcCosts()" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;text-align:center">
+      </div>`).join('')}
+    </div>
+    <div id="cc-result"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">
+      <button class="btn btn-gray" onclick="closeModal()">Fechar</button>
+      <button class="btn" onclick="applyCostCalc()">✅ Aplicar nos Kits</button>
+    </div>`,true);
+};
+window.calcCosts=function(){
+  const purchase=parseFloat(document.getElementById('cc-purchase')?.value)||0;
+  const rate=parseFloat(document.getElementById('cc-rate')?.value)||5.70;
+  const boxWeight=parseFloat(document.getElementById('cc-box-weight')?.value)||0;
+  const freightIntl=parseFloat(document.getElementById('cc-freight-intl')?.value)||0;
+  const packaging=parseFloat(document.getElementById('cc-packaging')?.value)||0;
+  const usDefault=document.getElementById('cc-us-default')?.checked;
+  const usFreight=usDefault?5.50:(parseFloat(document.getElementById('cc-us-freight')?.value)||5.50);
+  const purchaseUSD=rate>0?purchase/rate:purchase;
+  const items=[];
+  document.querySelectorAll('.cc-qty').forEach(inp=>{
+    const qty=parseInt(inp.value)||0;if(!qty)return;
+    const kid=inp.dataset.kid;
+    const wt=parseFloat(document.querySelector(`.cc-wt[data-kid="${kid}"]`)?.value)||0;
+    const kit=window.state.kits.find(k=>k.id===kid);if(!kit)return;
+    items.push({kid,name:kit.name,qty,wt,totalWt:wt*qty});
+  });
+  const el=document.getElementById('cc-result');if(!el)return;
+  if(!items.length){el.innerHTML='';return;}
+  const totalWt=items.reduce((a,i)=>a+i.totalWt,0);
+  const totalUnits=items.reduce((a,i)=>a+i.qty,0);
+  const purchasePerUnit=totalUnits>0?purchaseUSD/totalUnits:0;
+  const packagingPerUnit=totalUnits>0?packaging/totalUnits:0;
+  let rows='';
+  items.forEach(item=>{
+    const freightShare=totalWt>0?(item.totalWt/totalWt)*freightIntl/item.qty:0;
+    const totalCost=purchasePerUnit+freightShare+packagingPerUnit+usFreight;
+    const kit=window.state.kits.find(k=>k.id===item.kid);
+    const margin=kit?(kit.salePrice-totalCost)/kit.salePrice*100:0;
+    rows+=`<tr data-kid="${item.kid}" data-cost="${totalCost.toFixed(4)}">
+      <td style="padding:6px 10px;font-size:11px">${item.name.slice(0,30)}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:11px">${item.qty}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:11px">$${purchasePerUnit.toFixed(2)}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:11px">$${freightShare.toFixed(2)}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:11px">$${packagingPerUnit.toFixed(2)}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:11px">$${usFreight.toFixed(2)}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:11px;font-weight:700;color:#6366f1">$${totalCost.toFixed(2)}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:11px;color:${margin>30?'#10b981':margin>10?'#f59e0b':'#ef4444'}">${margin.toFixed(1)}%</td>
+    </tr>`;
+  });
+  el.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Custo por unidade calculado:</div>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
+    <thead><tr style="background:#f8fafc"><th style="padding:6px 10px;text-align:left">Kit</th><th style="padding:6px 10px">Qtd</th><th style="padding:6px 10px">Produto</th><th style="padding:6px 10px">Frete Intl</th><th style="padding:6px 10px">Embalagem</th><th style="padding:6px 10px">Frete EUA</th><th style="padding:6px 10px;font-weight:700">Custo Total</th><th style="padding:6px 10px">Margem</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>
+  <div style="font-size:11px;color:var(--sub);margin-top:8px">Peso total: ${totalWt.toFixed(2)}kg | ${totalUnits} unidades | Custo de compra: $${purchaseUSD.toFixed(2)}</div>`;
+};
+window.applyCostCalc=function(){
+  document.querySelectorAll('#cc-result tr[data-kid]').forEach(row=>{
+    const kid=row.dataset.kid,cost=parseFloat(row.dataset.cost)||0;
+    if(kid&&cost>0) window.state.kits=window.state.kits.map(k=>k.id===kid?{...k,costPrice:+cost.toFixed(4)}:k);
+  });
+  saveState('kits');closeModal();toast('Custos atualizados nos kits!');
+};
+
+// Legacy stubs
+let movType='saida';
+window.setMovType=function(t){movType=t;};
+window.saveMov=function(){openMovModal('saida');};
+function updMovTotal(){}
+window.autoMovPrice=function(){};
+
 
 // ── KITS ─────────────────────────────────────────────────────────────────
 window._kitItems=[];
-let _kitSearch='', _kitFilter='todos';
+let _kitSearch='', _kitFilter='todos', _kitView='table';
+window.setKitView=function(v){_kitView=v;renderKits();};
 window.setKitSearch=function(v){_kitSearch=v;renderKits();};
 window.setKitFilter=function(f){
   _kitFilter=f;
@@ -573,6 +807,10 @@ window.renderKits=function(){
   const kitsToShow=filteredKits;
   document.getElementById('content').innerHTML=`
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <div class="kit-view-toggle">
+        <button class="kit-view-btn ${_kitView==='card'?'active':''}" onclick="setKitView('card')">⊞ Cards</button>
+        <button class="kit-view-btn ${_kitView==='table'?'active':''}" onclick="setKitView('table')">☰ Tabela</button>
+      </div>
       <input class="search-input" id="kit-search" placeholder="🔍 Buscar kit..." oninput="setKitSearch(this.value)" style="max-width:240px">
       <div class="filter-tabs" id="kit-filter-tabs">
         <button class="filter-tab active" onclick="setKitFilter('todos')">Todos</button>
@@ -582,10 +820,13 @@ window.renderKits=function(){
         <button class="filter-tab" onclick="setKitFilter('estoque')">Com Estoque</button>
         <button class="filter-tab" onclick="setKitFilter('sem_estoque')">Sem Estoque</button>
       </div>
-      <button class="btn" style="margin-left:auto" onclick="openKitModal()">+ Montar Kit</button>
+      <div style="display:flex;gap:6px;margin-left:auto;flex-wrap:wrap"><button class="btn btn-gray" onclick="openShoppingList()">🛒 Lista Compras</button><button class="btn btn-gray" onclick="openCostCalc()">🧮 Calc. Custo</button><button class="btn btn-gray" onclick="openStockAdjust()">📦 Ajuste</button><button class="btn" onclick="openKitModal()">+ Montar Kit</button></div>
     </div>
     ${kitsToShow.length===0?`<div class="card" style="text-align:center;padding:52px"><div style="font-size:44px;margin-bottom:10px">🎁</div><div style="font-size:15px;font-weight:600">Nenhum kit montado</div><div style="font-size:13px;color:var(--sub);margin-top:6px">Ao montar um kit, o estoque dos livros é descontado.</div></div>`:
-    `<div class="kit-grid">${kitsToShow.map(kit=>{
+    _kitView==='table'?`<table style="width:100%;border-collapse:collapse">
+    <thead><tr><th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--sub);text-transform:uppercase;background:#f8fafc;border-bottom:1px solid var(--border)">Kit</th><th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--sub);text-transform:uppercase;background:#f8fafc;border-bottom:1px solid var(--border)">Preço</th><th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--sub);text-transform:uppercase;background:#f8fafc;border-bottom:1px solid var(--border)">Custo</th><th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--sub);text-transform:uppercase;background:#f8fafc;border-bottom:1px solid var(--border)">Markup</th><th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--sub);text-transform:uppercase;background:#f8fafc;border-bottom:1px solid var(--border)">Vendido</th><th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--sub);text-transform:uppercase;background:#f8fafc;border-bottom:1px solid var(--border)">Estoque</th><th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--sub);text-transform:uppercase;background:#f8fafc;border-bottom:1px solid var(--border)"></th></tr></thead>
+    <tbody>${kitsToShow.map(kit=>{const cost=kCost(kit),margin=parseCur(kit.salePrice)>0?((parseCur(kit.salePrice)-cost)/cost*100):0;const sold=window.state.movements.filter(m=>m.type==='saida'&&m.bookId===`kit-${kit.id}`).reduce((a,m)=>a+m.quantity,0);return`<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:10px 12px;font-weight:600;font-size:13px">${kit.name}</td><td style="padding:10px 12px">${BRL(kit.salePrice)}</td><td style="padding:10px 12px;color:var(--sub)">${BRL(cost)}</td><td style="padding:10px 12px"><span style="color:${margin>30?'#10b981':margin>10?'#f59e0b':'#ef4444'};font-weight:600">${margin.toFixed(0)}%</span></td><td style="padding:10px 12px"><span class="badge badge-indigo">${sold}</span></td><td style="padding:10px 12px"><span class="badge ${(kit.stock||0)>2?'badge-green':(kit.stock||0)>0?'badge-amber':'badge-red'}">${kit.stock||0}</span></td><td style="padding:10px 12px"><div style="display:flex;gap:4px"><button class="btn btn-sm" onclick="openKitModal(window.state.kits.find(k=>k.id==='${kit.id}'))">✏️</button><button class="btn btn-sm btn-green" onclick="openSellKitModal('${kit.id}')">💲</button><button class="btn btn-sm" onclick="openBuildMore('${kit.id}')">🔧</button><button class="btn btn-sm btn-red" onclick="delKit('${kit.id}')">🗑️</button></div></td></tr>`;}).join('')}</tbody>
+  </table>`:`<div class="kit-grid">${kitsToShow.map(kit=>{
       const cost=kCost(kit),margin=parseCur(kit.salePrice)>0?((parseCur(kit.salePrice)-cost)/cost*100):0;
       return`<div class="kit-card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><div style="font-size:15px;font-weight:700">🎁 ${kit.name}</div><span class="badge badge-green">${BRL(kit.salePrice)}</span></div>
@@ -692,6 +933,8 @@ window.delSup=function(id){if(!confirm('Excluir fornecedor?'))return;window.stat
 
 // ── DESPESAS ─────────────────────────────────────────────────────────────
 let despFilter='all';
+let despMonth='all';
+window.setDespMonth=function(m){despMonth=m;renderDespesas();};
 function renderDespesas(){
   const cats=window.state.expenseCategories;
   const totByCat=cats.map(cat=>({cat,val:window.state.expenses.filter(e=>e.category===cat).reduce((a,e)=>a+parseCur(e.amount),0)})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
@@ -703,7 +946,7 @@ function renderDespesas(){
       ${totByCat.slice(0,3).map(x=>statCard('🏷️',x.cat,BRL(x.val),'#6366f1','')).join('')}
     </div>
     <div style="display:grid;grid-template-columns:300px 1fr;gap:14px">
-      <div class="card">
+      <div class="card" style="display:none">
         <div style="font-size:14px;font-weight:700;margin-bottom:16px">Registrar Despesa</div>
         <div class="fg"><label>Categoria *</label><select id="gt-cat" style="width:100%"><option value="">Selecione...</option>${cats.map(c=>`<option>${c}</option>`).join('')}</select></div>
         ${fg('Descrição *',inp('gt-desc','text','','Ex: Anúncio Instagram'))}
@@ -725,6 +968,33 @@ function renderDespesas(){
     </div>`;
   initCurrency('.cur');
 }
+
+window.openDespModal=function(exp=null){
+  const cats=window.state.expenseCategories;
+  const partners=window.state.partners||[];
+  openModal(exp?'Editar Despesa':'Nova Despesa',`
+    <div class="grid2">
+      <div class="fg"><label>Categoria *</label><select id="gt-cat" style="width:100%"><option value="">Selecione...</option>${cats.map(c=>`<option value="${c}" ${exp?.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      ${fg('Descrição *',inp('gt-desc','text',exp?.description||'','Ex: Frete importação'))}
+    </div>
+    <div class="grid2">
+      ${fg('Valor ($) *',cinp('gt-amount',exp?.amount||0))}
+      ${fg('Data *',inp('gt-date','date',exp?.date||today()))}
+    </div>
+    <div class="fg"><label>Pago por</label><select id="gt-paidby" style="width:100%"><option value="">Não especificado</option>${partners.map(p=>`<option value="${p.id}" ${exp?.paidBy===p.id?'selected':''}>${p.name}</option>`).join('')}</select></div>
+    ${fg('Observações',inp('gt-notes','text',exp?.notes||'','Opcional'))}
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">
+      <button class="btn btn-gray" onclick="closeModal()">Cancelar</button>
+      <button class="btn" onclick="saveDespesa2('${exp?.id||''}')">✅ Salvar</button>
+    </div>`,true);
+};
+window.saveDespesa2=function(id){
+  const d={category:document.getElementById('gt-cat').value,description:document.getElementById('gt-desc').value.trim(),amount:parseCur(document.getElementById('gt-amount').value),date:document.getElementById('gt-date').value,paidBy:document.getElementById('gt-paidby')?.value||'',notes:document.getElementById('gt-notes').value};
+  if(!d.category||!d.description||!d.amount)return alert('Preencha categoria, descrição e valor.');
+  if(id){window.state.expenses=window.state.expenses.map(e=>e.id===id?{...e,...d}:e);}else{window.state.expenses.push({...d,id:genId()});}
+  saveState('expenses');closeModal();renderDespesas();toast(id?'Despesa atualizada!':'Despesa registrada!');
+};
+
 window.saveDespesa=function(){const d={category:document.getElementById('gt-cat').value,description:document.getElementById('gt-desc').value.trim(),amount:parseCur(document.getElementById('gt-amount').value),date:document.getElementById('gt-date').value,paidBy:document.getElementById('gt-paidby')?.value||'',notes:document.getElementById('gt-notes').value};if(!d.category||!d.description||!d.amount)return alert('Preencha categoria, descrição e valor.');window.state.expenses.push({...d,id:genId()});saveState('expenses');renderDespesas();toast('Despesa registrada!');};
 window.delDespesa=function(id){window.state.expenses=window.state.expenses.filter(e=>e.id!==id);saveState('expenses');renderDespesas();};
 
@@ -737,17 +1007,22 @@ function renderRelatorios(){
   const profit=tRev-tCost-tExp;
   const now=new Date(),lbl=[],rv=[],ex=[],lu=[];
   for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);lbl.push(d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''));const mo=d.getMonth(),yr=d.getFullYear(),r=S.movements.filter(mv=>mv.type==='saida'&&new Date(mv.date).getMonth()===mo&&new Date(mv.date).getFullYear()===yr).reduce((a,mv)=>a+mv.quantity*mv.unitPrice,0),e=S.expenses.filter(ex=>new Date(ex.date).getMonth()===mo&&new Date(ex.date).getFullYear()===yr).reduce((a,ex)=>a+parseCur(ex.amount),0);rv.push(+r.toFixed(2));ex.push(+e.toFixed(2));lu.push(+(r-e).toFixed(2));}
-  // Top sold + most profitable
-  const bookStats=S.books.map(b=>{
+  // Top sold + most profitable — include KITS
+  const allItems=[
+    ...S.kits.map(k=>({id:`kit-${k.id}`,title:k.name,salePrice:k.salePrice,costPrice:k.costPrice,category:'Kits',isKit:true})),
+    ...S.books.map(b=>({...b,isKit:false}))
+  ];
+  const bookStats=allItems.map(b=>{
     const sold=S.movements.filter(m=>m.type==='saida'&&m.bookId===b.id).reduce((a,m)=>a+m.quantity,0);
     const revenue=S.movements.filter(m=>m.type==='saida'&&m.bookId===b.id).reduce((a,m)=>a+m.quantity*m.unitPrice,0);
-    const costOfSold=sold*b.costPrice;
+    const cogs=S.movements.filter(m=>m.type==='saida'&&m.bookId===b.id).reduce((a,m)=>a+(m.cogs||b.costPrice*m.quantity),0);
+    const costOfSold=cogs||sold*b.costPrice;
     const profit=revenue-costOfSold;
     return{...b,sold,revenue,profit,markup:b.costPrice>0?((b.salePrice-b.costPrice)/b.costPrice*100):0};
   }).filter(b=>b.sold>0);
   const topSold=[...bookStats].sort((a,b)=>b.sold-a.sold).slice(0,6);
   const topProfit=[...bookStats].sort((a,b)=>b.profit-a.profit).slice(0,6);
-  const catRev=BCATS.map(cat=>{const v=S.movements.filter(m=>m.type==='saida').reduce((a,m)=>{const b=S.books.find(bk=>bk.id===m.bookId);return b?.category===cat?a+m.quantity*m.unitPrice:a;},0);return{name:cat,value:+v.toFixed(2)};}).filter(c=>c.value>0).sort((a,b)=>b.value-a.value).slice(0,6);
+  const catRev=[{name:'Kits',value:+S.movements.filter(m=>m.type==='saida'&&m.bookId?.startsWith('kit-')).reduce((a,m)=>a+m.quantity*m.unitPrice,0).toFixed(2)},...BCATS.map(cat=>{const v=S.movements.filter(m=>m.type==='saida'&&!m.bookId?.startsWith('kit-')).reduce((a,m)=>{const b=S.books.find(bk=>bk.id===m.bookId);return b?.category===cat?a+m.quantity*m.unitPrice:a;},0);return{name:cat,value:+v.toFixed(2)};})].filter(c=>c.value>0).sort((a,b)=>b.value-a.value).slice(0,6);
   const catExp=window.state.expenseCategories.map(cat=>({name:cat,value:+S.expenses.filter(e=>e.category===cat).reduce((a,e)=>a+parseCur(e.amount),0).toFixed(2)})).filter(c=>c.value>0);
   document.getElementById('content').innerHTML=`
     <div class="grid4" style="margin-bottom:14px">${statCard('📈','Receita Total',BRL(tRev),'#10b981','')}${statCard('📉','Custo Compras',BRL(tCost),'#ef4444','')}${statCard('💸','Despesas',BRL(tExp),'#f59e0b','')}${statCard('💰','Lucro Líquido',BRL(profit),profit>=0?'#10b981':'#ef4444','')}</div>
@@ -907,6 +1182,95 @@ window.openPartnerModal=function(){const partners=window.state.partners||[{id:'p
   <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="savePartners(${partners.length})">Salvar</button></div>`);};
 window.savePartners=function(n){const partners=[];let total=0;for(let i=0;i<n;i++){const share=parseFloat(document.getElementById('pf-share-'+i)?.value)||50;total+=share;partners.push({id:'p'+(i+1),name:document.getElementById('pf-name-'+i)?.value||'Sócio '+(i+1),email:document.getElementById('pf-email-'+i)?.value||'',share});}if(Math.abs(total-100)>0.01)return alert('As participações devem somar 100%. Total atual: '+total+'%');window.state.partners=partners;saveState('partners');closeModal();renderConfig();toast('Sócios atualizados!');};
 
+
+
+// ── SEARCHABLE SELECT ────────────────────────────────────────────────────
+function ssHtml(id, options, placeholder){
+  const opts = options.map(o=>`<div class="ss-item" data-val="${o.value}" data-lbl="${(o.label||'').replace(/"/g,'&quot;')}" onclick="ssPick('${id}',this)">${o.label}</div>`).join('');
+  return `<div class="ss-wrap"><input class="ss-input" id="${id}-txt" placeholder="${placeholder||'Buscar...'}" autocomplete="off" oninput="ssFilter('${id}')" onfocus="ssOpen('${id}')" onblur="setTimeout(()=>ssClose('${id}'),200)"><div class="ss-drop" id="${id}-drop">${opts}</div><input type="hidden" id="${id}" value=""></div>`;
+}
+window.ssFilter=function(id){
+  const q=(document.getElementById(id+'-txt')?.value||'').toLowerCase();
+  const drop=document.getElementById(id+'-drop');
+  if(!drop) return;
+  let any=false;
+  drop.querySelectorAll('.ss-item').forEach(el=>{
+    const show=el.dataset.lbl.toLowerCase().includes(q);
+    el.style.display=show?'':'none';
+    if(show)any=true;
+  });
+  let empty=drop.querySelector('.ss-empty');
+  if(!any){if(!empty){empty=document.createElement('div');empty.className='ss-empty';empty.textContent='Nenhum resultado';drop.appendChild(empty);}empty.style.display='';}
+  else if(empty) empty.style.display='none';
+  ssOpen(id);
+};
+window.ssOpen=function(id){const d=document.getElementById(id+'-drop');if(d)d.style.display='block';};
+window.ssClose=function(id){const d=document.getElementById(id+'-drop');if(d)d.style.display='none';};
+window.ssPick=function(id,el){
+  document.getElementById(id+'-txt').value=el.dataset.lbl;
+  document.getElementById(id).value=el.dataset.val;
+  ssClose(id);
+  if(id==='ms-book-0'||id.startsWith('ms-book-'))autoItemPrice(id.split('-')[2]||0);
+};
+window.ssSet=function(id,val,lbl){
+  const inp=document.getElementById(id);const txt=document.getElementById(id+'-txt');
+  if(inp)inp.value=val;if(txt)txt.value=lbl||val;
+};
+
+// ── MULTI-ITEM FORM HELPERS ──────────────────────────────────────────────
+let _movItems=[];
+window.autoItemPrice=function(idx){
+  const id=document.getElementById(`ms-book-${idx}`)?.value;
+  if(!id)return;
+  const isKit=id.startsWith('kit-');
+  const item=isKit?window.state.kits.find(k=>`kit-${k.id}`===id):window.state.books.find(b=>b.id===id);
+  if(!item)return;
+  const typeEl=document.getElementById('ms-type');
+  const type=typeEl?typeEl.value:'saida';
+  const price=type==='entrada'?(item.costPrice||0):(item.salePrice||0);
+  document.getElementById(`ms-price-${idx}`).value=price.toFixed(2);
+  calcMovTotal();
+};
+window.calcMovTotal=function(){
+  let total=0,lines=[];
+  document.querySelectorAll('.item-row[data-idx]').forEach(row=>{
+    const i=row.dataset.idx;
+    const qty=parseFloat(document.getElementById(`ms-qty-${i}`)?.value)||0;
+    const price=parseCur(document.getElementById(`ms-price-${i}`)?.value)||0;
+    total+=qty*price;
+    if(qty>0&&price>0) lines.push(`${qty}x $${price.toFixed(2)}`);
+  });
+  const bar=document.getElementById('ms-total-bar');
+  if(bar&&total>0){bar.style.display='block';bar.innerHTML=`💰 Total: <strong>${BRL(total)}</strong>${lines.length>1?' ('+lines.join(' + ')+')':''}`;}
+  else if(bar){bar.style.display='none';}
+};
+window.addItemRow=function(){
+  const rows=document.querySelectorAll('.item-row[data-idx]');
+  const idx=rows.length;
+  const allItems=[...window.state.kits.map(k=>({value:`kit-${k.id}`,label:`🎁 ${k.name} (est:${k.stock||0})`})),...window.state.books.map(b=>({value:b.id,label:`📚 ${b.title} (est:${b.stock})`}))];
+  const row=document.createElement('div');
+  row.className='item-row';row.dataset.idx=idx;
+  row.innerHTML=`<div>${ssHtml('ms-book-'+idx,allItems,'Produto ou kit...')}</div><input type="number" id="ms-qty-${idx}" value="1" min="1" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px" oninput="calcMovTotal()"><div style="position:relative"><span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:12px">$</span><input type="number" id="ms-price-${idx}" step="0.01" placeholder="0.00" style="padding:7px 10px 7px 22px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;width:100%" oninput="calcMovTotal()"></div><button onclick="removeItemRow(this)" style="background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:16px;line-height:1">×</button>`;
+  document.getElementById('item-rows-wrap').appendChild(row);
+};
+window.removeItemRow=function(btn){
+  btn.closest('.item-row').remove();
+  // Re-index
+  document.querySelectorAll('.item-row[data-idx]').forEach((row,i)=>row.dataset.idx=i);
+  calcMovTotal();
+};
+window.collectMovItems=function(){
+  const items=[];
+  document.querySelectorAll('.item-row[data-idx]').forEach(row=>{
+    const i=row.dataset.idx;
+    const bookId=document.getElementById(`ms-book-${i}`)?.value;
+    const bookTxt=document.getElementById(`ms-book-${i}-txt`)?.value||'';
+    const qty=parseInt(document.getElementById(`ms-qty-${i}`)?.value)||0;
+    const price=parseCur(document.getElementById(`ms-price-${i}`)?.value)||0;
+    if(bookId&&qty>0&&price>0) items.push({bookId,bookTitle:bookTxt,qty,price});
+  });
+  return items;
+};
 
 // ── SHOPIFY CSV IMPORT ────────────────────────────────────────────────────
 const SHOPIFY_MAP=[
