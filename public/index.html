@@ -506,9 +506,57 @@ window.renderMovimentos=function(){
         {label:'Total',render:r=>`<strong>${BRL(r.quantity*(r.unitPrice||0))}</strong>`},
         {label:'Contato',render:r=>r.clientName||r.supplierName||'-'},
         {label:'UGC',render:r=>r.ugcCode?`<span class="badge badge-indigo" style="font-size:10px">${r.ugcCode}</span>`:''},
-        {label:'',render:r=>`<button class="btn btn-sm btn-red" onclick="delMov('${r.id}')">🗑️</button>`}
+        {label:'',render:r=>`<div style="display:flex;gap:4px"><button class="btn btn-sm" onclick="openEditMov('${r.id}')">✏️</button><button class="btn btn-sm btn-red" onclick="delMov('${r.id}')">🗑️</button></div>`}
       ],sorted,'Nenhuma movimentação registrada.')}
     </div>`;
+};
+
+
+window.openEditMov=function(id){
+  const m=window.state.movements.find(x=>x.id===id);
+  if(!m)return;
+  const clientOpts=window.state.clients.map(x=>({value:x.id,label:`${x.name}${x.email?' — '+x.email:''}`}));
+  const supplierOpts=window.state.suppliers.map(x=>({value:x.id,label:x.name}));
+  const typeLabels={saida:'📤 Saída',entrada:'📥 Entrada',brinde:'🎁 Brinde',perda:'📉 Perda'};
+  openModal(`✏️ Editar — ${typeLabels[m.type]||m.type}`,`
+    <div class="alert alert-amber" style="font-size:12px;margin-bottom:12px">Editando: <strong>${m.bookTitle}</strong></div>
+    <div class="grid2">
+      ${fg('Quantidade',`<input type="number" id="em-qty" value="${m.quantity}" min="1" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">`)}
+      ${fg('Preço Unit. ($)',cinp('em-price',m.unitPrice||0))}
+    </div>
+    ${m.type==='saida'?`<div class="fg"><label>Cliente</label>${ssHtml('em-client',clientOpts,'Buscar cliente...')}</div><div class="grid2">${fg('Código UGC',`<input type="text" id="em-ugc" value="${m.ugcCode||''}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">`)}${fg('Desconto %',`<input type="number" id="em-disc" value="${m.discountPct||0}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">`)}</div>`:''}
+    ${m.type==='entrada'?`<div class="fg"><label>Fornecedor</label>${ssHtml('em-supplier',supplierOpts,'Buscar fornecedor...')}</div><div class="grid2">${fg('Frete Import. EUA ($)',cinp('em-frete-import',m.freightImport||0))}${fg('Frete no Brasil ($)',cinp('em-frete-br',m.freightBR||0))}</div>`:''}
+    ${fg('Data',`<input type="date" id="em-date" value="${m.date||''}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">`)}
+    ${fg('Observações',`<input type="text" id="em-notes" value="${(m.notes||'').replace(/"/g,'&quot;')}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">`)}
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">
+      <button class="btn btn-gray" onclick="closeModal()">Cancelar</button>
+      <button class="btn" onclick="saveEditMov('${id}','${m.type}')">✅ Salvar Alteração</button>
+    </div>`,true);
+  if(m.clientId) setTimeout(()=>ssSet('em-client',m.clientId,window.state.clients.find(c=>c.id===m.clientId)?.name||''),100);
+  if(m.supplierId) setTimeout(()=>ssSet('em-supplier',m.supplierId,window.state.suppliers.find(s=>s.id===m.supplierId)?.name||''),100);
+};
+window.saveEditMov=function(id,type){
+  const qty=parseInt(document.getElementById('em-qty')?.value)||1;
+  const price=parseCur(document.getElementById('em-price')?.value)||0;
+  const date=document.getElementById('em-date')?.value||today();
+  const notes=document.getElementById('em-notes')?.value||'';
+  const clientId=document.getElementById('em-client')?.value||'';
+  const client=clientId?window.state.clients.find(c=>c.id===clientId):null;
+  const supplierId=document.getElementById('em-supplier')?.value||'';
+  const supplier=supplierId?window.state.suppliers.find(s=>s.id===supplierId):null;
+  const ugcCode=document.getElementById('em-ugc')?.value||'';
+  const discPct=parseFloat(document.getElementById('em-disc')?.value)||0;
+  const freteImport=parseCur(document.getElementById('em-frete-import')?.value)||0;
+  const freteBR=parseCur(document.getElementById('em-frete-br')?.value)||0;
+  window.state.movements=window.state.movements.map(m=>{
+    if(m.id!==id)return m;
+    return{...m,quantity:qty,unitPrice:price,date,notes,
+      clientId,clientName:client?.name||m.clientName,
+      supplierId,supplierName:supplier?.name||m.supplierName,
+      ugcCode:ugcCode||m.ugcCode,discountPct:discPct,
+      freightImport:freteImport,freightBR:freteBR,freightCost:freteImport+freteBR};
+  });
+  saveState('movements');closeModal();renderMovimentos();toast('Lançamento atualizado!');
 };
 
 window.delMov=function(id){
@@ -537,12 +585,12 @@ window.openMovModal=function(type){
   const clientOpts=window.state.clients.map(c=>({value:c.id,label:`${c.name}${c.email?' — '+c.email:''}`}));
   const supplierOpts=window.state.suppliers.map(s=>({value:s.id,label:s.name}));
   const titles={saida:'📤 Registrar Saída / Venda',entrada:'📥 Registrar Entrada / Compra',brinde:'🎁 Registrar Brinde / UGC',perda:'📉 Registrar Perda / Avaria'};
-  const firstRow=`<div class="item-row" data-idx="0"><div>${ssHtml('ms-book-0',allItems,'Buscar produto ou kit...')}</div><input type="number" id="ms-qty-0" value="1" min="1" oninput="calcMovTotal()" style="padding:7px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;text-align:center"><div style="position:relative"><span style="position:absolute;left:7px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:11px">$</span><input type="number" id="ms-price-0" step="0.01" placeholder="0.00" oninput="calcMovTotal()" style="padding:6px 6px 6px 18px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;width:100%"></div><div></div></div>`;
+  const firstRow=`<div class="item-row" data-idx="0"><div>${ssHtml('ms-book-0',allItems,'Buscar produto ou kit...','openLivroModal()')}</div><input type="number" id="ms-qty-0" value="1" min="1" oninput="calcMovTotal()" style="padding:7px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;text-align:center"><div style="position:relative"><span style="position:absolute;left:7px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:11px">$</span><input type="number" id="ms-price-0" step="0.01" placeholder="0.00" oninput="calcMovTotal()" style="padding:6px 6px 6px 18px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;width:100%"></div><div></div></div>`;
   const addBtn=type!=='brinde'?`<button onclick="addItemRow()" style="width:100%;padding:6px;border:1.5px dashed var(--border);border-radius:8px;background:none;cursor:pointer;font-size:12px;color:var(--sub);margin-bottom:10px;font-family:inherit">+ Adicionar produto</button>`:'';
 
   let extra='';
-  if(type==='saida')  extra=`<div class="fg"><label>Cliente</label>${ssHtml('ms-client',clientOpts,'Buscar cliente...')}</div><div class="grid2">${fg('Código UGC',inp('ms-ugc','text','','Ex: RAY10'))}${fg('Desconto %',inp('ms-disc','number','0'))}</div>`;
-  if(type==='entrada')extra=`<div class="fg"><label>Fornecedor</label>${ssHtml('ms-supplier',supplierOpts,'Buscar fornecedor...')}</div><div class="grid2">${fg('Frete Import. EUA ($)',cinp('ms-frete-import',0))}${fg('Frete no Brasil ($)',cinp('ms-frete-br',0))}</div>`;
+  if(type==='saida')  extra=`<div class="fg"><label>Cliente</label>${ssHtml('ms-client',clientOpts,'Buscar cliente...','openClientModal()')}</div><div class="grid2">${fg('Código UGC',inp('ms-ugc','text','','Ex: RAY10'))}${fg('Desconto %',inp('ms-disc','number','0'))}</div>`;
+  if(type==='entrada')extra=`<div class="fg"><label>Fornecedor</label>${ssHtml('ms-supplier',supplierOpts,'Buscar fornecedor...','openSupModal()')}</div><div class="grid2">${fg('Frete Import. EUA ($)',cinp('ms-frete-import',0))}${fg('Frete no Brasil ($)',cinp('ms-frete-br',0))}</div>`;
   if(type==='brinde') extra=`<div class="grid2">${fg('Criador (nome)',inp('ms-ugc-name','text','','Nome do criador'))}${fg('Código UGC',inp('ms-ugc','text','','Ex: RAY10'))}</div>${fg('Frete no Brasil ($)',cinp('ms-frete-br',0))}`;
   if(type==='perda')  extra=`${fg('Motivo',inp('ms-motivo','text','','Ex: Produto danificado'))}`;
 
@@ -792,7 +840,7 @@ window.setKitFilter=function(f){
   renderKits();
 };
 window.renderKits=function(){
-  const kCost=kit=>kit.items.reduce((a,i)=>{const b=window.state.books.find(bk=>bk.id===i.bookId);return a+(b?b.costPrice*i.quantity:0);},0);
+  const kCost=kit=>{const fromBOM=kit.items.reduce((a,i)=>{const b=window.state.books.find(bk=>bk.id===i.bookId);return a+(b?b.costPrice*i.quantity:0);},0);return fromBOM>0?fromBOM:(parseCur(kit.costPrice)||0);};
   // Filter & sort
   let filteredKits=[...window.state.kits];
   const kSalesCount=kit=>window.state.movements.filter(m=>m.type==='saida'&&m.bookId===`kit-${kit.id}`).reduce((a,m)=>a+m.quantity,0);
@@ -912,19 +960,37 @@ function renderClientes(){
   const q=cliSearch.toLowerCase(),f=window.state.clients.filter(c=>c.name.toLowerCase().includes(q)||(c.email||'').toLowerCase().includes(q));
   const getTotal=id=>window.state.movements.filter(m=>m.type==='saida'&&m.clientId===id).reduce((a,m)=>a+m.quantity*m.unitPrice,0);
   document.getElementById('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="search-bar"><input class="search-input" id="cli-search" placeholder="🔍 Buscar cliente..." oninput="setCliSearch(this.value)" value="${cliSearch}"><button class="btn" style="margin-left:auto" onclick="openClientModal()">+ Novo Cliente</button></div><div style="font-size:12px;color:var(--muted)">${f.length} cliente(s)</div></div>
-  <div class="card">${tbl([{label:'Nome / E-mail',render:r=>`<div><div style="font-weight:600">${r.name}</div><div style="font-size:11px;color:var(--sub)">${r.email||'-'}</div></div>`},{label:'Telefone',render:r=>r.phone||'-'},{label:'Cidade',render:r=>r.city||'-'},{label:'Total Compras',render:r=>`<strong style="color:#10b981">${BRL(getTotal(r.id))}</strong>`},{label:'',render:r=>`<div style="display:flex;gap:5px"><button class="btn btn-sm btn-blue" onclick="viewClient('${r.id}')">📋</button><button class="btn btn-sm" onclick='openClientModal(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✏️</button><button class="btn btn-sm btn-red" onclick="delClient('${r.id}')">🗑️</button></div>`}],f,'Nenhum cliente cadastrado.')}</div>`;
+  <div class="card">${tbl([{label:'Nome / E-mail',render:r=>`<div><div style="font-weight:600">${r.name}</div><div style="font-size:11px;color:var(--sub)">${r.email||'-'}</div></div>`},{label:'Telefone',render:r=>r.phone||'-'},{label:'Cidade / Estado / ZIP',render:r=>`<div><div style="font-size:13px">${r.city||'-'}</div><div style="font-size:11px;color:var(--sub)">${[r.state,r.zip].filter(Boolean).join(' · ')||''}</div></div>`},{label:'Total Compras',render:r=>`<strong style="color:#10b981">${BRL(getTotal(r.id))}</strong>`},{label:'',render:r=>`<div style="display:flex;gap:5px"><button class="btn btn-sm btn-blue" onclick="viewClient('${r.id}')">📋</button><button class="btn btn-sm" onclick='openClientModal(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✏️</button><button class="btn btn-sm btn-red" onclick="delClient('${r.id}')">🗑️</button></div>`}],f,'Nenhum cliente cadastrado.')}</div>`;
 }
-window.openClientModal=function(c=null){openModal(c?'Editar Cliente':'Novo Cliente',`${fg('Nome *',inp('cf-name','text',c?.name||''))}<div class="grid2">${fg('E-mail',inp('cf-email','email',c?.email||''))}${fg('Telefone',inp('cf-phone','text',c?.phone||''))}</div><div class="grid2">${fg('Cidade',inp('cf-city','text',c?.city||''))}${fg('CPF/CNPJ',inp('cf-doc','text',c?.doc||''))}</div>${fg('Endereço',inp('cf-address','text',c?.address||''))}${fg('Observações',inp('cf-notes','text',c?.notes||'','Opcional'))}<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveClient('${c?.id||''}')">Salvar</button></div>`);};
-window.saveClient=function(id){const d={name:document.getElementById('cf-name').value.trim(),email:document.getElementById('cf-email').value,phone:document.getElementById('cf-phone').value,city:document.getElementById('cf-city').value,doc:document.getElementById('cf-doc').value,address:document.getElementById('cf-address').value,notes:document.getElementById('cf-notes').value};if(!d.name)return alert('Nome é obrigatório.');if(id)window.state.clients=window.state.clients.map(c=>c.id===id?{...c,...d}:c);else window.state.clients.push({...d,id:genId()});saveState('clients');closeModal();renderClientes();toast(id?'Cliente atualizado!':'Cliente cadastrado!');};
+window.openClientModal=function(c=null){
+  const stateOpts=`<option value=''>Select state...</option><option value='AL'>AL — Alabama</option><option value='AK'>AK — Alaska</option><option value='AZ'>AZ — Arizona</option><option value='AR'>AR — Arkansas</option><option value='CA'>CA — California</option><option value='CO'>CO — Colorado</option><option value='CT'>CT — Connecticut</option><option value='DE'>DE — Delaware</option><option value='FL'>FL — Florida</option><option value='GA'>GA — Georgia</option><option value='HI'>HI — Hawaii</option><option value='ID'>ID — Idaho</option><option value='IL'>IL — Illinois</option><option value='IN'>IN — Indiana</option><option value='IA'>IA — Iowa</option><option value='KS'>KS — Kansas</option><option value='KY'>KY — Kentucky</option><option value='LA'>LA — Louisiana</option><option value='ME'>ME — Maine</option><option value='MD'>MD — Maryland</option><option value='MA'>MA — Massachusetts</option><option value='MI'>MI — Michigan</option><option value='MN'>MN — Minnesota</option><option value='MS'>MS — Mississippi</option><option value='MO'>MO — Missouri</option><option value='MT'>MT — Montana</option><option value='NE'>NE — Nebraska</option><option value='NV'>NV — Nevada</option><option value='NH'>NH — New Hampshire</option><option value='NJ'>NJ — New Jersey</option><option value='NM'>NM — New Mexico</option><option value='NY'>NY — New York</option><option value='NC'>NC — North Carolina</option><option value='ND'>ND — North Dakota</option><option value='OH'>OH — Ohio</option><option value='OK'>OK — Oklahoma</option><option value='OR'>OR — Oregon</option><option value='PA'>PA — Pennsylvania</option><option value='RI'>RI — Rhode Island</option><option value='SC'>SC — South Carolina</option><option value='SD'>SD — South Dakota</option><option value='TN'>TN — Tennessee</option><option value='TX'>TX — Texas</option><option value='UT'>UT — Utah</option><option value='VT'>VT — Vermont</option><option value='VA'>VA — Virginia</option><option value='WA'>WA — Washington</option><option value='WV'>WV — West Virginia</option><option value='WI'>WI — Wisconsin</option><option value='WY'>WY — Wyoming</option><option value='DC'>DC — Washington DC</option><option value='PR'>PR — Puerto Rico</option><option value='VI'>VI — Virgin Islands</option>`;
+  openModal(c?'Editar Cliente':'Novo Cliente',`
+    ${fg('Nome *',inp('cf-name','text',c?.name||''))}
+    <div class="grid2">${fg('E-mail',inp('cf-email','email',c?.email||''))}${fg('Telefone',inp('cf-phone','text',c?.phone||'','Ex: (617) 555-1234'))}</div>
+    ${fg('Endereço',inp('cf-address','text',c?.address||'','Ex: 123 Main St'))}
+    <div class="grid3">
+      ${fg('Cidade',inp('cf-city','text',c?.city||''))}
+      <div class="fg"><label>Estado (US)</label><select id="cf-state" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:'Sora',sans-serif;outline:none">
+        ${stateOpts.replace(`value='${c?.state||''}'`,`value='${c?.state||''}' selected`)}
+      </select></div>
+      ${fg('ZIP Code',inp('cf-zip','text',c?.zip||'','Ex: 02139'))}
+    </div>
+    ${fg('Observações',inp('cf-notes','text',c?.notes||'','Opcional'))}
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">
+      <button class="btn btn-gray" onclick="closeModal()">Cancelar</button>
+      <button class="btn" onclick="saveClient('${c?.id||''}')">Salvar</button>
+    </div>`);
+};
+window.saveClient=function(id){const d={name:document.getElementById('cf-name').value.trim(),email:document.getElementById('cf-email').value,phone:document.getElementById('cf-phone').value,address:document.getElementById('cf-address').value,city:document.getElementById('cf-city').value,state:document.getElementById('cf-state')?.value||'',zip:document.getElementById('cf-zip')?.value||'',notes:document.getElementById('cf-notes').value};if(!d.name)return alert('Nome é obrigatório.');if(id)window.state.clients=window.state.clients.map(c=>c.id===id?{...c,...d}:c);else window.state.clients.push({...d,id:genId()});saveState('clients');closeModal();renderClientes();toast(id?'Cliente atualizado!':'Cliente cadastrado!');};
 window.delClient=function(id){if(!confirm('Excluir cliente?'))return;window.state.clients=window.state.clients.filter(c=>c.id!==id);saveState('clients');renderClientes();};
-window.viewClient=function(id){const c=window.state.clients.find(x=>x.id===id);const movs=window.state.movements.filter(m=>m.type==='saida'&&m.clientId===id).sort((a,b)=>new Date(b.date)-new Date(a.date));const total=movs.reduce((a,m)=>a+m.quantity*m.unitPrice,0);openModal(`📋 ${c.name}`,`<div class="alert alert-green">Total: <strong>${BRL(total)}</strong> em ${movs.length} compra(s)</div>${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Livro',render:r=>r.bookTitle||'-'},{label:'Qtd',key:'quantity'},{label:'Preço Unit.',render:r=>BRL(r.unitPrice)},{label:'Total',render:r=>`<strong>${BRL(r.quantity*r.unitPrice)}</strong>`}],movs,'Nenhuma compra.')}<div style="text-align:right;margin-top:12px"><button class="btn btn-gray" onclick="closeModal()">Fechar</button></div>`,true);};
+window.viewClient=function(id){const c=window.state.clients.find(x=>x.id===id);const movs=window.state.movements.filter(m=>m.type==='saida'&&m.clientId===id).sort((a,b)=>new Date(b.date)-new Date(a.date));const total=movs.reduce((a,m)=>a+m.quantity*m.unitPrice,0);openModal(`📋 ${c.name}`,`<div class="alert alert-green">Total: <strong>${BRL(total)}</strong> em ${movs.length} compra(s)</div><div style="font-size:12px;color:var(--sub);margin-bottom:12px">${[c.address,c.city,(c.state?c.state+' ':'')+c.zip,'USA'].filter(Boolean).join(', ')}</div>${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Livro',render:r=>r.bookTitle||'-'},{label:'Qtd',key:'quantity'},{label:'Preço Unit.',render:r=>BRL(r.unitPrice)},{label:'Total',render:r=>`<strong>${BRL(r.quantity*r.unitPrice)}</strong>`}],movs,'Nenhuma compra.')}<div style="text-align:right;margin-top:12px"><button class="btn btn-gray" onclick="closeModal()">Fechar</button></div>`,true);};
 
 // ── FORNECEDORES ─────────────────────────────────────────────────────────
 let supSearch='';
 function renderFornecedores(){
   const q=supSearch.toLowerCase(),f=window.state.suppliers.filter(s=>s.name.toLowerCase().includes(q));
   document.getElementById('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="search-bar"><input class="search-input" id="sup-search" placeholder="🔍 Buscar fornecedor..." oninput="setSupSearch(this.value)" value="${supSearch}"><button class="btn" style="margin-left:auto" onclick="openSupModal()">+ Novo Fornecedor</button></div><div style="font-size:12px;color:var(--muted)">${f.length} fornecedor(es)</div></div>
-  <div class="card">${tbl([{label:'Nome / CNPJ',render:r=>`<div><div style="font-weight:600">${r.name}</div><div style="font-size:11px;color:var(--sub)">${r.cnpj||'-'}</div></div>`},{label:'Telefone',render:r=>r.phone||'-'},{label:'E-mail',render:r=>r.email||'-'},{label:'Cidade',render:r=>r.city||'-'},{label:'',render:r=>`<div style="display:flex;gap:5px"><button class="btn btn-sm" onclick='openSupModal(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✏️</button><button class="btn btn-sm btn-red" onclick="delSup('${r.id}')">🗑️</button></div>`}],f,'Nenhum fornecedor cadastrado.')}</div>`;
+  <div class="card">${tbl([{label:'Nome / CNPJ',render:r=>`<div><div style="font-weight:600">${r.name}</div><div style="font-size:11px;color:var(--sub)">${r.cnpj||'-'}</div></div>`},{label:'Telefone',render:r=>r.phone||'-'},{label:'E-mail',render:r=>r.email||'-'},{label:'Cidade / Estado / ZIP',render:r=>`<div><div style="font-size:13px">${r.city||'-'}</div><div style="font-size:11px;color:var(--sub)">${[r.state,r.zip].filter(Boolean).join(' · ')||''}</div></div>`},{label:'',render:r=>`<div style="display:flex;gap:5px"><button class="btn btn-sm" onclick='openSupModal(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✏️</button><button class="btn btn-sm btn-red" onclick="delSup('${r.id}')">🗑️</button></div>`}],f,'Nenhum fornecedor cadastrado.')}</div>`;
 }
 window.openSupModal=function(s=null){openModal(s?'Editar Fornecedor':'Novo Fornecedor',`${fg('Nome / Razão Social *',inp('sf-name','text',s?.name||''))}<div class="grid2">${fg('CNPJ',inp('sf-cnpj','text',s?.cnpj||''))}${fg('Telefone',inp('sf-phone','text',s?.phone||''))}</div><div class="grid2">${fg('E-mail',inp('sf-email','email',s?.email||''))}${fg('Cidade',inp('sf-city','text',s?.city||''))}</div>${fg('Observações',inp('sf-notes','text',s?.notes||'','Opcional'))}<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveSup('${s?.id||''}')">Salvar</button></div>`);};
 window.saveSup=function(id){const d={name:document.getElementById('sf-name').value.trim(),cnpj:document.getElementById('sf-cnpj').value,phone:document.getElementById('sf-phone').value,email:document.getElementById('sf-email').value,city:document.getElementById('sf-city').value,notes:document.getElementById('sf-notes').value};if(!d.name)return alert('Nome é obrigatório.');if(id)window.state.suppliers=window.state.suppliers.map(s=>s.id===id?{...s,...d}:s);else window.state.suppliers.push({...d,id:genId()});saveState('suppliers');closeModal();renderFornecedores();toast(id?'Fornecedor atualizado!':'Fornecedor cadastrado!');};
@@ -935,64 +1001,57 @@ let despFilter='all';
 let despMonth='all';
 window.setDespMonth=function(m){despMonth=m;renderDespesas();};
 function renderDespesas(){
-  const cats=window.state.expenseCategories;
-  const totByCat=cats.map(cat=>({cat,val:window.state.expenses.filter(e=>e.category===cat).reduce((a,e)=>a+parseCur(e.amount),0)})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
-  const filtered=[...window.state.expenses].filter(e=>despFilter==='all'||e.category===despFilter).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const totalGeral=window.state.expenses.reduce((a,e)=>a+parseCur(e.amount),0);
+  const S=window.state;
+  const cats=S.expenseCategories;
+  const partners=S.partners||[];
+  const now=new Date();
+  const monthOpts=[];for(let i=0;i<12;i++){const d=new Date(now.getFullYear(),now.getMonth()-i,1);monthOpts.push({val:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,lbl:d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})});}
+  const allExp=S.expenses;
+  const byMonth=despMonth==='all'?allExp:allExp.filter(e=>e.date?.slice(0,7)===despMonth);
+  const filtered=byMonth.filter(e=>despFilter==='all'||e.category===despFilter).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const totalFiltrado=byMonth.reduce((a,e)=>a+parseCur(e.amount),0);
+  const totByCat=cats.map(cat=>({cat,val:byMonth.filter(e=>e.category===cat).reduce((a,e)=>a+parseCur(e.amount),0)})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
+  const p1Total=byMonth.filter(e=>e.paidBy==='p1').reduce((a,e)=>a+parseCur(e.amount),0);
+  const p2Total=byMonth.filter(e=>e.paidBy==='p2').reduce((a,e)=>a+parseCur(e.amount),0);
   document.getElementById('content').innerHTML=`
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:14px">
-      ${statCard('💸','Total Geral',BRL(totalGeral),'#ef4444','')}
+    <!-- HEADER BAR -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <select onchange="setDespMonth(this.value)" style="padding:9px 16px;border:2px solid ${despMonth==='all'?'var(--border)':'#6366f1'};border-radius:10px;font-size:13px;font-family:'Sora',sans-serif;outline:none;background:${despMonth==='all'?'#fff':'#eef2ff'};color:${despMonth==='all'?'var(--fg)':'#4338ca'};font-weight:500;cursor:pointer;min-width:180px">
+          <option value="all" ${despMonth==='all'?'selected':''}>📅 Todos os períodos</option>
+          ${monthOpts.map(m=>`<option value="${m.val}" ${despMonth===m.val?'selected':''}>${m.lbl}</option>`).join('')}
+        </select>
+        ${despMonth!=='all'?`<span style="font-size:12px;background:#eef2ff;color:#4338ca;padding:5px 12px;border-radius:8px;font-weight:600">${filtered.length} lançamentos · ${BRL(totalFiltrado)}</span>`:''}
+      </div>
+      <button class="btn" onclick="openDespModal()">+ Nova Despesa</button>
+    </div>
+    <!-- KPI CARDS -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:18px">
+      ${statCard('💸','Total Período',BRL(totalFiltrado),'#ef4444','')}
       ${totByCat.slice(0,3).map(x=>statCard('🏷️',x.cat,BRL(x.val),'#6366f1','')).join('')}
+      ${partners.length===2?`${statCard('👤',partners[0].name,BRL(p1Total),'#10b981','')}${statCard('👤',partners[1].name,BRL(p2Total),'#f59e0b','')}`:'' }
     </div>
-    <div style="display:grid;grid-template-columns:300px 1fr;gap:14px">
-      <div class="card" style="display:none">
-        <div style="font-size:14px;font-weight:700;margin-bottom:16px">Registrar Despesa</div>
-        <div class="fg"><label>Categoria *</label><select id="gt-cat" style="width:100%"><option value="">Selecione...</option>${cats.map(c=>`<option>${c}</option>`).join('')}</select></div>
-        ${fg('Descrição *',inp('gt-desc','text','','Ex: Anúncio Instagram'))}
-        <div class="grid2">${fg('Valor (R$) *',cinp('gt-amount',0))}${fg('Data',inp('gt-date','date',today()))}</div>
-        <div class="fg"><label>Pago por</label><select id="gt-paidby" style="width:100%"><option value="">Não especificado</option>${window.state.partners.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
-        ${fg('Observações',inp('gt-notes','text','','Opcional'))}
-        <button class="btn" style="width:100%;justify-content:center" onclick="saveDespesa()">Registrar Despesa</button>
+    <!-- CATEGORY FILTER PILLS -->
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;align-items:center">
+      <span style="font-size:11px;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-right:4px">Filtrar:</span>
+      <button class="filter-tab ${despFilter==='all'?'active':''}" onclick="setDespFilter('all')">Todas</button>
+      ${cats.map(cat=>`<button class="filter-tab ${despFilter===cat?'active':''}" onclick="setDespFilter('${cat}')" style="font-size:11px">${cat}</button>`).join('')}
+    </div>
+    <!-- TABLE -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-size:14px;font-weight:700">Histórico (${filtered.length})</span>
+        <span style="font-size:13px;font-weight:600;color:#ef4444">${BRL(filtered.reduce((a,e)=>a+parseCur(e.amount),0))}</span>
       </div>
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-          <span style="font-size:14px;font-weight:700">Histórico (${filtered.length})</span>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="filter-tab ${despFilter==='all'?'active':''}" onclick="setDespFilter('all')">Todas</button>
-            ${cats.map(c=>`<button class="filter-tab ${despFilter===c?'active':''}" onclick="setDespFilter('${c}')">${c}</button>`).join('')}
-          </div>
-        </div>
-        ${tbl([{label:'Data',render:r=>fmtD(r.date)},{label:'Categoria',render:r=>`<span class="badge badge-indigo">${r.category||'-'}</span>`},{label:'Descrição',key:'description'},{label:'Valor',render:r=>`<strong style="color:#ef4444">${BRL(r.amount)}</strong>`},{label:'Pago por',render:r=>{const p=window.state.partners.find(x=>x.id===r.paidBy);return p?`<span class="badge badge-indigo">${p.name}</span>`:'<span style="color:var(--muted)">—</span>';}},{label:'',render:r=>`<button class="btn btn-sm btn-red" onclick="delDespesa('${r.id}')">🗑️</button>`}],filtered,'Nenhuma despesa registrada.')}
-      </div>
+      ${tbl([
+        {label:'Data',render:r=>fmtD(r.date)},
+        {label:'Categoria',render:r=>`<span class="badge badge-indigo" style="font-size:11px">${r.category}</span>`},
+        {label:'Descrição',render:r=>`<div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.description}</div>`},
+        {label:'Valor',render:r=>`<strong style="color:#ef4444">${BRL(r.amount)}</strong>`},
+        {label:'Pago por',render:r=>{const p=S.partners?.find(x=>x.id===r.paidBy);return p?`<span class="badge badge-green" style="font-size:10px">${p.name}</span>`:'<span style="color:var(--muted)">—</span>';}},
+        {label:'',render:r=>`<div style="display:flex;gap:4px"><button class="btn btn-sm" onclick="openDespModal(window.state.expenses.find(e=>e.id==='${r.id}'))">✏️</button><button class="btn btn-sm btn-red" onclick="delDespesa('${r.id}')">🗑️</button></div>`},
+      ],filtered,'Nenhuma despesa no período.')}
     </div>`;
-  initCurrency('.cur');
-}
-
-window.openDespModal=function(exp=null){
-  const cats=window.state.expenseCategories;
-  const partners=window.state.partners||[];
-  openModal(exp?'Editar Despesa':'Nova Despesa',`
-    <div class="grid2">
-      <div class="fg"><label>Categoria *</label><select id="gt-cat" style="width:100%"><option value="">Selecione...</option>${cats.map(c=>`<option value="${c}" ${exp?.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
-      ${fg('Descrição *',inp('gt-desc','text',exp?.description||'','Ex: Frete importação'))}
-    </div>
-    <div class="grid2">
-      ${fg('Valor ($) *',cinp('gt-amount',exp?.amount||0))}
-      ${fg('Data *',inp('gt-date','date',exp?.date||today()))}
-    </div>
-    <div class="fg"><label>Pago por</label><select id="gt-paidby" style="width:100%"><option value="">Não especificado</option>${partners.map(p=>`<option value="${p.id}" ${exp?.paidBy===p.id?'selected':''}>${p.name}</option>`).join('')}</select></div>
-    ${fg('Observações',inp('gt-notes','text',exp?.notes||'','Opcional'))}
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">
-      <button class="btn btn-gray" onclick="closeModal()">Cancelar</button>
-      <button class="btn" onclick="saveDespesa2('${exp?.id||''}')">✅ Salvar</button>
-    </div>`,true);
-};
-window.saveDespesa2=function(id){
-  const d={category:document.getElementById('gt-cat').value,description:document.getElementById('gt-desc').value.trim(),amount:parseCur(document.getElementById('gt-amount').value),date:document.getElementById('gt-date').value,paidBy:document.getElementById('gt-paidby')?.value||'',notes:document.getElementById('gt-notes').value};
-  if(!d.category||!d.description||!d.amount)return alert('Preencha categoria, descrição e valor.');
-  if(id){window.state.expenses=window.state.expenses.map(e=>e.id===id?{...e,...d}:e);}else{window.state.expenses.push({...d,id:genId()});}
-  saveState('expenses');closeModal();renderDespesas();toast(id?'Despesa atualizada!':'Despesa registrada!');
-};
 
 window.saveDespesa=function(){const d={category:document.getElementById('gt-cat').value,description:document.getElementById('gt-desc').value.trim(),amount:parseCur(document.getElementById('gt-amount').value),date:document.getElementById('gt-date').value,paidBy:document.getElementById('gt-paidby')?.value||'',notes:document.getElementById('gt-notes').value};if(!d.category||!d.description||!d.amount)return alert('Preencha categoria, descrição e valor.');window.state.expenses.push({...d,id:genId()});saveState('expenses');renderDespesas();toast('Despesa registrada!');};
 window.delDespesa=function(id){window.state.expenses=window.state.expenses.filter(e=>e.id!==id);saveState('expenses');renderDespesas();};
@@ -1014,7 +1073,7 @@ function renderRelatorios(){
   const bookStats=allItems.map(b=>{
     const sold=S.movements.filter(m=>m.type==='saida'&&m.bookId===b.id).reduce((a,m)=>a+m.quantity,0);
     const revenue=S.movements.filter(m=>m.type==='saida'&&m.bookId===b.id).reduce((a,m)=>a+m.quantity*m.unitPrice,0);
-    const cogs=S.movements.filter(m=>m.type==='saida'&&m.bookId===b.id).reduce((a,m)=>a+(m.cogs||b.costPrice*m.quantity),0);
+    const cogs=S.movements.filter(m=>m.type==='saida'&&m.bookId===b.id).reduce((a,m)=>a+(m.cogs||parseCur(b.costPrice||b.salePrice*0.3)*m.quantity),0);
     const costOfSold=cogs||sold*b.costPrice;
     const profit=revenue-costOfSold;
     return{...b,sold,revenue,profit,markup:b.costPrice>0?((b.salePrice-b.costPrice)/b.costPrice*100):0};
@@ -1066,11 +1125,20 @@ async function renderConfig(){
 
   if(configTab==='categorias'){
     const cats=window.state.expenseCategories;
+    const cats=window.state.expenseCategories;
     html+=`<div class="card">
-      <div style="font-size:14px;font-weight:700;margin-bottom:14px">🏷️ Categorias de Despesas</div>
-      <p style="font-size:13px;color:var(--sub);margin-bottom:14px">Estas categorias aparecem no cadastro de despesas.</p>
-      <div id="cats-list" style="display:flex;flex-wrap:wrap;margin-bottom:16px">${cats.map((c,i)=>`<span class="tag">${c}<button onclick="removeCategory(${i})">×</button></span>`).join('')}</div>
-      <div style="display:flex;gap:8px"><input type="text" id="new-cat-inp" placeholder="Nova categoria..." style="flex:1;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'Sora',sans-serif;outline:none"><button class="btn" onclick="addCategory()">+ Adicionar</button></div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:6px">🏷️ Categorias de Despesas</div>
+      <p style="font-size:13px;color:var(--sub);margin-bottom:14px">Clique em uma categoria para renomear. ×  para remover.</p>
+      <div id="cats-list" style="margin-bottom:16px">
+        ${cats.map((cat,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f1f5f9">
+          <input type="text" value="${cat}" onchange="renameCategory(${i},this.value)" style="flex:1;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:'Sora',sans-serif;outline:none">
+          <button onclick="removeCategory(${i})" style="background:#fee2e2;border:none;border-radius:6px;cursor:pointer;color:#dc2626;padding:5px 10px;font-size:13px">×</button>
+        </div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="new-cat-inp" placeholder="Nova categoria..." style="flex:1;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'Sora',sans-serif;outline:none">
+        <button class="btn" onclick="addCategory()">+ Adicionar</button>
+      </div>
     </div>`;
   }
 
@@ -1104,6 +1172,11 @@ async function renderConfig(){
   document.getElementById('content').innerHTML=html;
 }
 
+window.renameCategory=function(i,val){
+  if(!val.trim())return;
+  window.state.expenseCategories[i]=val.trim();
+  saveState('expenseCategories');toast('Categoria atualizada!');
+};
 window.addCategory=function(){const v=document.getElementById('new-cat-inp')?.value?.trim();if(!v||window.state.expenseCategories.includes(v))return;window.state.expenseCategories.push(v);saveState('expenseCategories');renderConfig();toast('Categoria adicionada!');};
 window.removeCategory=function(i){if(!confirm('Remover categoria?'))return;window.state.expenseCategories.splice(i,1);saveState('expenseCategories');renderConfig();};
 window.downloadBackup=function(){const data=JSON.stringify(window.state,null,2);const blob=new Blob([data],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`tucanobook-backup-${today()}-${new Date().toTimeString().slice(0,8).replace(/:/g,'h')}.json`;a.click();URL.revokeObjectURL(url);toast('Backup baixado!');};
@@ -1184,9 +1257,11 @@ window.savePartners=function(n){const partners=[];let total=0;for(let i=0;i<n;i+
 
 
 // ── SEARCHABLE SELECT ────────────────────────────────────────────────────
-function ssHtml(id, options, placeholder){
+function ssHtml(id, options, placeholder, addFn){
+  const addBtn=addFn?`<button type="button" onclick="${addFn}" style="padding:0 10px;border:1.5px solid var(--border);border-radius:0 8px 8px 0;background:#f8fafc;cursor:pointer;font-size:16px;color:#6366f1;border-left:none" title="Cadastrar novo">+</button>`:'';
+  const wrapStyle=addFn?'display:flex':'';
   const opts = options.map(o=>`<div class="ss-item" data-val="${o.value}" data-lbl="${(o.label||'').replace(/"/g,'&quot;')}" onclick="ssPick('${id}',this)">${o.label}</div>`).join('');
-  return `<div class="ss-wrap"><input class="ss-input" id="${id}-txt" placeholder="${placeholder||'Buscar...'}" autocomplete="off" oninput="ssFilter('${id}')" onfocus="ssOpen('${id}')" onblur="setTimeout(()=>ssClose('${id}'),200)"><div class="ss-drop" id="${id}-drop">${opts}</div><input type="hidden" id="${id}" value=""></div>`;
+  return `<div class="ss-wrap" style="${wrapStyle}"><input class="ss-input" id="${id}-txt" placeholder="${placeholder||'Buscar...'}" autocomplete="off" oninput="ssFilter('${id}')" onfocus="ssOpen('${id}')" onblur="setTimeout(()=>ssClose('${id}'),200)" style="${addFn?'border-radius:8px 0 0 8px':''}">${addBtn}<div class="ss-drop" id="${id}-drop">${opts}</div><input type="hidden" id="${id}" value=""></div>`;
 }
 window.ssFilter=function(id){
   const q=(document.getElementById(id+'-txt')?.value||'').toLowerCase();
@@ -1203,7 +1278,17 @@ window.ssFilter=function(id){
   else if(empty) empty.style.display='none';
   ssOpen(id);
 };
-window.ssOpen=function(id){const d=document.getElementById(id+'-drop');if(d)d.style.display='block';};
+window.ssOpen=function(id){
+  const d=document.getElementById(id+'-drop');if(!d)return;
+  const q=(document.getElementById(id+'-txt')?.value||'').toLowerCase();
+  // If empty, show first 8 items only
+  let shown=0;
+  d.querySelectorAll('.ss-item').forEach(el=>{
+    if(!q){el.style.display=shown<10?'':'none';if(shown<10)shown++;}
+    else{const show=el.dataset.lbl.toLowerCase().includes(q);el.style.display=show?'':'none';}
+  });
+  d.style.display='block';
+};
 window.ssClose=function(id){const d=document.getElementById(id+'-drop');if(d)d.style.display='none';};
 window.ssPick=function(id,el){
   document.getElementById(id+'-txt').value=el.dataset.lbl;
@@ -1249,7 +1334,7 @@ window.addItemRow=function(){
   const allItems=[...window.state.kits.map(k=>({value:`kit-${k.id}`,label:`🎁 ${k.name} (est:${k.stock||0})`})),...window.state.books.map(b=>({value:b.id,label:`📚 ${b.title} (est:${b.stock})`}))];
   const row=document.createElement('div');
   row.className='item-row';row.dataset.idx=idx;
-  row.innerHTML=`<div>${ssHtml('ms-book-'+idx,allItems,'Produto ou kit...')}</div><input type="number" id="ms-qty-${idx}" value="1" min="1" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px" oninput="calcMovTotal()"><div style="position:relative"><span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:12px">$</span><input type="number" id="ms-price-${idx}" step="0.01" placeholder="0.00" style="padding:7px 10px 7px 22px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;width:100%" oninput="calcMovTotal()"></div><button onclick="removeItemRow(this)" style="background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:16px;line-height:1">×</button>`;
+  row.innerHTML=`<div>${ssHtml('ms-book-'+idx,allItems,'Produto ou kit...','openLivroModal()')}</div><input type="number" id="ms-qty-${idx}" value="1" min="1" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px" oninput="calcMovTotal()"><div style="position:relative"><span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:12px">$</span><input type="number" id="ms-price-${idx}" step="0.01" placeholder="0.00" style="padding:7px 10px 7px 22px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;width:100%" oninput="calcMovTotal()"></div><button onclick="removeItemRow(this)" style="background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:16px;line-height:1">×</button>`;
   document.getElementById('item-rows-wrap').appendChild(row);
 };
 window.removeItemRow=function(btn){
@@ -1270,6 +1355,12 @@ window.collectMovItems=function(){
   });
   return items;
 };
+
+
+// ── QUICK-ADD stubs (open relevant modal from within popup) ──────────────
+window.openLivroModal=function(){closeModal();setTimeout(()=>{window.goto('livros');setTimeout(()=>{const btn=document.querySelector('[onclick*="openBookModal"]');if(btn)btn.click();else toast('Vá em Catálogo para adicionar livros.');},300);},100);};
+window.openClientModal=function(){closeModal();setTimeout(()=>{window.goto('clientes');setTimeout(()=>{const btn=document.querySelector('[onclick*="openCliModal"]');if(btn)btn.click();else toast('Vá em Clientes para cadastrar.');},300);},100);};
+window.openSupModal=function(){closeModal();setTimeout(()=>{window.goto('fornecedores');setTimeout(()=>{const btn=document.querySelector('[onclick*="openFornModal"]');if(btn)btn.click();else toast('Vá em Fornecedores para cadastrar.');},300);},100);};
 
 // ── SHOPIFY CSV IMPORT ────────────────────────────────────────────────────
 const SHOPIFY_MAP=[
