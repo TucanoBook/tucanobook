@@ -187,7 +187,7 @@ tr:hover td{background:#fafbff}.empty-row td{text-align:center;color:var(--muted
   .ss-wrap{position:relative;flex:1}
   .ss-input{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:'Sora',sans-serif;outline:none;background:#fff;color:var(--fg)}
   .ss-input:focus{border-color:#6366f1}
-  .ss-drop{position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1.5px solid #6366f1;border-radius:8px;max-height:200px;overflow-y:auto;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+  .ss-drop{display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1.5px solid #6366f1;border-radius:8px;max-height:200px;overflow-y:auto;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.12)}
   .ss-item{padding:9px 14px;font-size:13px;cursor:pointer}
   .ss-item:hover{background:#f0f4ff}
   .ss-empty{padding:9px 14px;font-size:12px;color:var(--sub);font-style:italic}
@@ -553,8 +553,9 @@ window.saveMov=function(){
 
 // ── KITS ─────────────────────────────────────────────────────────────────
 window._kitItems=[];
-let _kitSearch='', _kitFilter='todos';
+let _kitSearch='', _kitFilter='todos', _kitView='table';
 window.setKitSearch=function(v){_kitSearch=v;renderKits();};
+window.setKitView=function(v){_kitView=v;renderKits()};
 window.setKitFilter=function(f){
   _kitFilter=f;
   document.querySelectorAll('#kit-filter-tabs .filter-tab').forEach((btn,i)=>{
@@ -575,40 +576,72 @@ window.renderKits=function(){
   else if(_kitFilter==='estoque')filteredKits=filteredKits.filter(k=>(k.stock||0)>0);
   else if(_kitFilter==='sem_estoque')filteredKits=filteredKits.filter(k=>!(k.stock||0));
   const kitsToShow=filteredKits;
+  const tableView=`<div class="card" style="padding:0;overflow:hidden"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="background:#f8fafc;border-bottom:2px solid var(--border)">
+      <th style="padding:10px 14px;text-align:left;font-weight:600">Kit</th>
+      <th style="padding:10px 14px;text-align:right;font-weight:600">Venda</th>
+      <th style="padding:10px 14px;text-align:right;font-weight:600">Custo</th>
+      <th style="padding:10px 14px;text-align:right;font-weight:600">Markup</th>
+      <th style="padding:10px 14px;text-align:center;font-weight:600">Estoque</th>
+      <th style="padding:10px 14px;text-align:center;font-weight:600">Vendidos</th>
+      <th style="padding:10px 14px;text-align:right;font-weight:600">Ações</th>
+    </tr></thead>
+    <tbody>${kitsToShow.map(kit=>{
+      const cost=kCost(kit),margin=parseCur(kit.salePrice)>0?((parseCur(kit.salePrice)-cost)/cost*100):0,sold=kSalesCount(kit);
+      return`<tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:10px 14px"><div style="font-weight:600">🎁 ${kit.name}</div>${kit.description?`<div style="font-size:11px;color:var(--sub)">${kit.description}</div>`:''}</td>
+        <td style="padding:10px 14px;text-align:right;font-weight:600">${BRL(kit.salePrice)}</td>
+        <td style="padding:10px 14px;text-align:right;color:var(--sub)">${BRL(cost)}</td>
+        <td style="padding:10px 14px;text-align:right"><span style="color:${margin>30?'#10b981':margin>10?'#f59e0b':'#ef4444'};font-weight:600">${margin.toFixed(0)}%</span></td>
+        <td style="padding:10px 14px;text-align:center"><span class="badge ${(kit.stock||0)>0?'badge-green':'badge-red'}">${kit.stock||0}</span></td>
+        <td style="padding:10px 14px;text-align:center"><span class="badge badge-indigo">${sold}</span></td>
+        <td style="padding:10px 14px;text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end">
+          <button class="btn btn-sm btn-green" onclick="sellKit('${kit.id}')" ${!kit.stock?'disabled':''}>💲</button>
+          <button class="btn btn-sm btn-amber" onclick="buildMoreKit('${kit.id}')">+</button>
+          <button class="btn btn-sm" onclick='openKitModal(${JSON.stringify(kit).replace(/'/g,"&#39;")})'>✏️</button>
+          <button class="btn btn-sm btn-red" onclick="delKit('${kit.id}')">🗑️</button>
+        </div></td>
+      </tr>`;}).join('')}
+    </tbody></table></div>`;
+  const cardView=`<div class="kit-grid">${kitsToShow.map(kit=>{
+    const cost=kCost(kit),margin=parseCur(kit.salePrice)>0?((parseCur(kit.salePrice)-cost)/cost*100):0;
+    return`<div class="kit-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><div style="font-size:15px;font-weight:700">🎁 ${kit.name}</div><span class="badge badge-green">${BRL(kit.salePrice)}</span></div>
+      ${kit.description?`<div style="font-size:12px;color:var(--sub);margin-bottom:8px">${kit.description}</div>`:''}
+      <div style="font-size:12px;color:var(--sub);margin-bottom:4px">Conteúdo:</div>
+      ${kit.items.map(item=>{const b=window.state.books.find(bk=>bk.id===item.bookId);return b?`<div style="font-size:12px;padding:2px 0;color:#374151">• ${b.title} × ${item.quantity}</div>`:''}).join('')}
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <div style="font-size:11px;color:var(--sub)">Custo<br><strong>${BRL(cost)}</strong></div>
+        <div style="font-size:11px;color:var(--sub)">Markup<br><strong style="color:${margin>30?'#10b981':margin>10?'#f59e0b':'#ef4444'}">${margin.toFixed(1)}%</strong></div>
+        <div style="font-size:11px;color:var(--sub)">Estoque<br><span class="badge ${(kit.stock||0)>0?'badge-green':'badge-red'}">${kit.stock||0}</span></div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="btn btn-sm btn-green" style="flex:1" onclick="sellKit('${kit.id}')" ${!kit.stock?'disabled':''}>Vender${kit.stock>0?` (${kit.stock})`:'—'}</button>
+        <button class="btn btn-sm btn-amber" onclick="buildMoreKit('${kit.id}')">+ Montar</button>
+        <button class="btn btn-sm" onclick='openKitModal(${JSON.stringify(kit).replace(/'/g,"&#39;")})'>✏️</button>
+        <button class="btn btn-sm btn-red" onclick="delKit('${kit.id}')">🗑️</button>
+      </div>
+    </div>`;}).join('')}</div>`;
   document.getElementById('content').innerHTML=`
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
       <input class="search-input" id="kit-search" placeholder="🔍 Buscar kit..." oninput="setKitSearch(this.value)" style="max-width:240px">
       <div class="filter-tabs" id="kit-filter-tabs">
-        <button class="filter-tab active" onclick="setKitFilter('todos')">Todos</button>
-        <button class="filter-tab" onclick="setKitFilter('mais_vendidos')">+ Vendidos</button>
-        <button class="filter-tab" onclick="setKitFilter('mais_lucro')">+ Rentáveis</button>
-        <button class="filter-tab" onclick="setKitFilter('menos_vendidos')">− Vendidos</button>
-        <button class="filter-tab" onclick="setKitFilter('estoque')">Com Estoque</button>
-        <button class="filter-tab" onclick="setKitFilter('sem_estoque')">Sem Estoque</button>
+        <button class="filter-tab ${_kitFilter==='todos'?'active':''}" onclick="setKitFilter('todos')">Todos</button>
+        <button class="filter-tab ${_kitFilter==='mais_vendidos'?'active':''}" onclick="setKitFilter('mais_vendidos')">+ Vendidos</button>
+        <button class="filter-tab ${_kitFilter==='mais_lucro'?'active':''}" onclick="setKitFilter('mais_lucro')">+ Rentáveis</button>
+        <button class="filter-tab ${_kitFilter==='menos_vendidos'?'active':''}" onclick="setKitFilter('menos_vendidos')">− Vendidos</button>
+        <button class="filter-tab ${_kitFilter==='estoque'?'active':''}" onclick="setKitFilter('estoque')">Com Estoque</button>
+        <button class="filter-tab ${_kitFilter==='sem_estoque'?'active':''}" onclick="setKitFilter('sem_estoque')">Sem Estoque</button>
       </div>
-      <button class="btn" style="margin-left:auto" onclick="openKitModal()">+ Montar Kit</button>
+      <div style="display:flex;gap:4px;margin-left:auto">
+        <button class="btn btn-sm ${_kitView==='table'?'':'btn-gray'}" onclick="setKitView('table')" title="Lista">☰ Lista</button>
+        <button class="btn btn-sm ${_kitView==='card'?'':'btn-gray'}" onclick="setKitView('card')" title="Cards">⊞ Cards</button>
+      </div>
+      <button class="btn" onclick="openKitModal()">+ Montar Kit</button>
     </div>
-    ${kitsToShow.length===0?`<div class="card" style="text-align:center;padding:52px"><div style="font-size:44px;margin-bottom:10px">🎁</div><div style="font-size:15px;font-weight:600">Nenhum kit montado</div><div style="font-size:13px;color:var(--sub);margin-top:6px">Ao montar um kit, o estoque dos livros é descontado.</div></div>`:
-    `<div class="kit-grid">${kitsToShow.map(kit=>{
-      const cost=kCost(kit),margin=parseCur(kit.salePrice)>0?((parseCur(kit.salePrice)-cost)/cost*100):0;
-      return`<div class="kit-card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><div style="font-size:15px;font-weight:700">🎁 ${kit.name}</div><span class="badge badge-green">${BRL(kit.salePrice)}</span></div>
-        ${kit.description?`<div style="font-size:12px;color:var(--sub);margin-bottom:8px">${kit.description}</div>`:''}
-        <div style="font-size:12px;color:var(--sub);margin-bottom:4px">Conteúdo:</div>
-        ${kit.items.map(item=>{const b=window.state.books.find(bk=>bk.id===item.bookId);return b?`<div style="font-size:12px;padding:2px 0;color:#374151">• ${b.title} × ${item.quantity}</div>`:''}).join('')}
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-          <div style="font-size:11px;color:var(--sub)">Custo<br><strong>${BRL(cost)}</strong></div>
-          <div style="font-size:11px;color:var(--sub)">Markup<br><strong style="color:${margin>30?'#10b981':margin>10?'#f59e0b':'#ef4444'}">${margin.toFixed(1)}%</strong></div>
-          <div style="font-size:11px;color:var(--sub)">Estoque Kits<br><span class="badge ${kit.stock>0?'badge-green':'badge-red'}">${kit.stock||0}</span></div>
-        </div>
-        ${kit.stock>0?`<div class="stock-bar"><div class="stock-bar-fill" style="width:${Math.min(100,((kit.stock||0)/Math.max(1,(kit.stock||0)+5))*100)}%"></div></div>`:''}
-        <div style="display:flex;gap:6px;margin-top:10px">
-          <button class="btn btn-sm btn-green" style="flex:1" onclick="sellKit('${kit.id}')" ${!kit.stock?'disabled':''}>Vender${kit.stock>0?` (${kit.stock})`:'—'}</button>
-          <button class="btn btn-sm btn-amber" onclick="buildMoreKit('${kit.id}')">+ Montar</button>
-          <button class="btn btn-sm" onclick='openKitModal(${JSON.stringify(kit).replace(/'/g,"&#39;")})'>✏️</button>
-          <button class="btn btn-sm btn-red" onclick="delKit('${kit.id}')">🗑️</button>
-        </div>
-      </div>`;}).join('')}</div>`}`;
+    ${kitsToShow.length===0
+      ?`<div class="card" style="text-align:center;padding:52px"><div style="font-size:44px;margin-bottom:10px">🎁</div><div style="font-size:15px;font-weight:600">Nenhum kit montado</div><div style="font-size:13px;color:var(--sub);margin-top:6px">Ao montar um kit, o estoque dos livros é descontado.</div></div>`
+      :_kitView==='table'?tableView:cardView}`;
 };
 
 window.openKitModal=function(kit=null){
