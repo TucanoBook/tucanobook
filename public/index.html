@@ -442,17 +442,6 @@ function renderDashboard(){
   const recent=[...S.movements].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
   const lbl=[],rv=[],ex=[];
   for(let i=5;i>=0;i--){const d=new Date(yr,mo-i,1);lbl.push(d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''));const m2=d.getMonth(),y2=d.getFullYear();rv.push(+S.movements.filter(mv=>mv.type==='saida'&&new Date(mv.date).getMonth()===m2&&new Date(mv.date).getFullYear()===y2).reduce((a,mv)=>a+mv.quantity*mv.unitPrice,0).toFixed(2));ex.push(+S.expenses.filter(e=>new Date(e.date).getMonth()===m2&&new Date(e.date).getFullYear()===y2).reduce((a,e)=>a+parseCur(e.amount),0).toFixed(2));}
-  // Apply search + filter
-  let filteredKits=[...window.state.kits];
-  const kSalesCount=kit=>window.state.movements.filter(m=>m.type==='saida'&&m.bookId===`kit-${kit.id}`).reduce((a,m)=>a+m.quantity,0);
-  const kProfit=kit=>{const cost=kCost(kit);return(parseCur(kit.salePrice)-cost)*kSalesCount(kit);};
-  if(_kitSearch){const q=_kitSearch.toLowerCase();filteredKits=filteredKits.filter(k=>k.name.toLowerCase().includes(q));}
-  if(_kitFilter==='mais_vendidos')filteredKits.sort((a,b)=>kSalesCount(b)-kSalesCount(a));
-  else if(_kitFilter==='mais_lucro')filteredKits.sort((a,b)=>kProfit(b)-kProfit(a));
-  else if(_kitFilter==='menos_vendidos')filteredKits.sort((a,b)=>kSalesCount(a)-kSalesCount(b));
-  else if(_kitFilter==='estoque')filteredKits=filteredKits.filter(k=>(k.stock||0)>0);
-  else if(_kitFilter==='sem_estoque')filteredKits=filteredKits.filter(k=>!(k.stock||0));
-  const kitsToShow=filteredKits;
   document.getElementById('content').innerHTML=`
     <div class="grid4" style="margin-bottom:16px">${statCard('📚','Livros em Estoque',tot,'#6366f1',BRL(val)+' em valor')}${statCard('👥','Clientes',S.clients.length,'#3b82f6','')}${statCard('📈','Receita do Mês',BRL(mRev),'#10b981','')}${statCard('💸','Despesas do Mês',BRL(mExp),'#f59e0b','#f59e0b','')}</div>
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px">
@@ -576,6 +565,16 @@ window.setKitFilter=function(f){
 };
 window.renderKits=function(){
   const kCost=kit=>{const bom=kit.items.reduce((a,i)=>{const b=window.state.books.find(bk=>bk.id===i.bookId);return a+(b?b.costPrice*i.quantity:0);},0);return bom>0?bom:(parseCur(kit.costPrice)||0);};
+  let filteredKits=[...window.state.kits];
+  const kSalesCount=kit=>window.state.movements.filter(m=>m.type==='saida'&&m.bookId===`kit-${kit.id}`).reduce((a,m)=>a+m.quantity,0);
+  const kProfit=kit=>{const cost=kCost(kit);return(parseCur(kit.salePrice)-cost)*kSalesCount(kit);};
+  if(_kitSearch){const q=_kitSearch.toLowerCase();filteredKits=filteredKits.filter(k=>k.name.toLowerCase().includes(q));}
+  if(_kitFilter==='mais_vendidos')filteredKits.sort((a,b)=>kSalesCount(b)-kSalesCount(a));
+  else if(_kitFilter==='mais_lucro')filteredKits.sort((a,b)=>kProfit(b)-kProfit(a));
+  else if(_kitFilter==='menos_vendidos')filteredKits.sort((a,b)=>kSalesCount(a)-kSalesCount(b));
+  else if(_kitFilter==='estoque')filteredKits=filteredKits.filter(k=>(k.stock||0)>0);
+  else if(_kitFilter==='sem_estoque')filteredKits=filteredKits.filter(k=>!(k.stock||0));
+  const kitsToShow=filteredKits;
   document.getElementById('content').innerHTML=`
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
       <input class="search-input" id="kit-search" placeholder="🔍 Buscar kit..." oninput="setKitSearch(this.value)" style="max-width:240px">
@@ -1003,6 +1002,35 @@ window.openPartnerModal=function(){const partners=window.state.partners||[{id:'p
 window.savePartners=function(n){const partners=[];let total=0;for(let i=0;i<n;i++){const share=parseFloat(document.getElementById('pf-share-'+i)?.value)||50;total+=share;partners.push({id:'p'+(i+1),name:document.getElementById('pf-name-'+i)?.value||'Sócio '+(i+1),email:document.getElementById('pf-email-'+i)?.value||'',share});}if(Math.abs(total-100)>0.01)return alert('As participações devem somar 100%. Total atual: '+total+'%');window.state.partners=partners;saveState('partners');closeModal();renderConfig();toast('Sócios atualizados!');};
 
 window.renderDashboard=renderDashboard;window.renderLivros=renderLivros;window.renderClientes=renderClientes;window.renderFornecedores=renderFornecedores;window.renderDespesas=renderDespesas;window.renderRelatorios=renderRelatorios;window.renderConfig=renderConfig;window.saveState=saveState;
+
+// ── SEARCHABLE SELECT ────────────────────────────────────────────────────
+function ssHtml(id,options,placeholder){
+  const opts=options.map(o=>`<div class="ss-item" data-val="${o.value}" data-lbl="${(o.label||'').replace(/"/g,'&quot;')}" onclick="ssPick('${id}',this)">${o.label}</div>`).join('');
+  return `<div class="ss-wrap"><input class="ss-input" id="${id}-txt" placeholder="${placeholder||'Buscar...'}" autocomplete="off" oninput="ssFilter('${id}')" onfocus="ssOpen('${id}')" onblur="setTimeout(()=>ssClose('${id}'),200)"><div class="ss-drop" id="${id}-drop">${opts}</div><input type="hidden" id="${id}" value=""></div>`;
+}
+window.ssFilter=function(id){
+  const q=(document.getElementById(id+'-txt')?.value||'').toLowerCase();
+  const drop=document.getElementById(id+'-drop');
+  if(!drop)return;
+  let any=false;
+  drop.querySelectorAll('.ss-item').forEach(el=>{const show=el.dataset.lbl.toLowerCase().includes(q);el.style.display=show?'':'none';if(show)any=true;});
+  let empty=drop.querySelector('.ss-empty');
+  if(!any){if(!empty){empty=document.createElement('div');empty.className='ss-empty';empty.textContent='Nenhum resultado';drop.appendChild(empty);}empty.style.display='';}
+  else if(empty)empty.style.display='none';
+  ssOpen(id);
+};
+window.ssOpen=function(id){const d=document.getElementById(id+'-drop');if(d)d.style.display='block';};
+window.ssClose=function(id){const d=document.getElementById(id+'-drop');if(d)d.style.display='none';};
+window.ssPick=function(id,el){
+  document.getElementById(id+'-txt').value=el.dataset.lbl;
+  document.getElementById(id).value=el.dataset.val;
+  ssClose(id);
+  if(id==='ms-book-0'||id.startsWith('ms-book-'))autoItemPrice(id.split('-')[2]||0);
+};
+window.ssSet=function(id,val,lbl){
+  const inp=document.getElementById(id),txt=document.getElementById(id+'-txt');
+  if(inp)inp.value=val;if(txt)txt.value=lbl||val;
+};
 
 window.openMovModal=function(type){
   var S=window.state;
