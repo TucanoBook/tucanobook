@@ -1081,7 +1081,16 @@ function renderUgc(){
     </div>
     <div class="card">
       ${tbl([
-        {label:'Criador',render:r=>`<div><div style="font-weight:600">${r.name}</div><div style="font-size:11px;color:var(--sub)">${r.product||'-'}</div></div>`},
+        {label:'Criador',render:r=>{
+          const nets=[
+            r.instagram&&{url:r.instagram,icon:'📸',label:'Instagram'},
+            r.tiktok&&{url:r.tiktok,icon:'🎵',label:'TikTok'},
+            r.youtube&&{url:r.youtube,icon:'▶️',label:'YouTube'},
+            r.other&&{url:r.other,icon:'🔗',label:'Link'},
+          ].filter(Boolean);
+          const links=nets.map(n=>`<a href="${n.url}" target="_blank" title="${n.label}" style="text-decoration:none;font-size:14px">${n.icon}</a>`).join(' ');
+          return`<div><div style="font-weight:600">${r.name}</div><div style="font-size:11px;color:var(--sub);margin-top:2px">${r.product||'—'}</div>${links?'<div style="margin-top:4px">'+links+'</div>':''}</div>`;
+        }},
         {label:'Código',render:r=>`<span class="badge badge-indigo" style="font-family:monospace;font-size:12px">${r.code}</span>`},
         {label:'Desconto',render:r=>`<span class="badge badge-amber">${r.discount||10}%</span>`},
         {label:'Investimento',render:r=>`${BRL((r.costBooks||0)+(r.costFreight||0))}`},
@@ -1092,17 +1101,37 @@ function renderUgc(){
       ],creators,'Nenhum criador UGC cadastrado.')}
     </div>`;
 }
-window.openUgcModal=function(c=null){openModal(c?'Editar Criador':'Novo Criador UGC',`
-  <div class="grid2">${fg('Nome do Criador *',inp('uf-name','text',c?.name||''))}${fg('Código de Desconto *',inp('uf-code','text',c?.code||'','Ex: RAY10'))}</div>
+window.openUgcModal=function(c=null){openModal(c?'Editar Influenciador':'Novo Influenciador UGC',`
+  <div class="grid2">${fg('Nome *',inp('uf-name','text',c?.name||''))}${fg('Código de Desconto *',inp('uf-code','text',c?.code||'','Ex: RAY10'))}</div>
   ${fg('Produto/Kit enviado',inp('uf-product','text',c?.product||'','Ex: Mega Combo + Devocional'))}
+  <div style="font-size:12px;font-weight:600;color:var(--sub);margin:10px 0 6px">📱 Redes Sociais</div>
+  <div class="grid2">
+    ${fg('📸 Instagram',inp('uf-instagram','url',c?.instagram||'','https://instagram.com/...'))}
+    ${fg('🎵 TikTok',inp('uf-tiktok','url',c?.tiktok||'','https://tiktok.com/@...'))}
+  </div>
+  <div class="grid2">
+    ${fg('▶️ YouTube',inp('uf-youtube','url',c?.youtube||'','https://youtube.com/...'))}
+    ${fg('🔗 Outro link',inp('uf-other','url',c?.other||'','https://...'))}
+  </div>
   <div class="grid3">
     ${fg('Desconto %',inp('uf-disc','number',c?.discount||10,'10'))}
     ${fg('Custo dos Livros ($)',cinp('uf-books',c?.costBooks||0))}
     ${fg('Custo do Frete ($)',cinp('uf-freight',c?.costFreight||0))}
   </div>
   <div class="grid2">${fg('Data de Início',inp('uf-date','date',c?.startDate||today()))}${fg('Status',sel('uf-status',[{v:'ativo',l:'Ativo'},{v:'inativo',l:'Inativo'}],c?.status||'ativo'))}</div>
-  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveUgc('${c?.id||''}')">Salvar</button></div>`);};
-window.saveUgc=function(id){const d={name:document.getElementById('uf-name').value.trim(),code:document.getElementById('uf-code').value.trim().toUpperCase(),product:document.getElementById('uf-product').value,discount:parseFloat(document.getElementById('uf-disc').value)||10,costBooks:parseCur(document.getElementById('uf-books').value),costFreight:parseCur(document.getElementById('uf-freight').value),startDate:document.getElementById('uf-date').value,status:document.getElementById('uf-status').value};if(!d.name||!d.code)return alert('Nome e código são obrigatórios.');if(!window.state.ugcCreators)window.state.ugcCreators=[];if(id)window.state.ugcCreators=window.state.ugcCreators.map(c=>c.id===id?{...c,...d}:c);else window.state.ugcCreators.push({...d,id:genId()});saveState('ugcCreators');closeModal();renderUgc();toast(id?'Criador atualizado!':'Criador cadastrado!');};
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveUgc('${c?.id||''}')">Salvar</button></div>`,true);};
+window.saveUgc=function(id){
+  const d={name:document.getElementById('uf-name').value.trim(),code:document.getElementById('uf-code').value.trim().toUpperCase(),product:document.getElementById('uf-product').value,
+    instagram:document.getElementById('uf-instagram').value.trim(),tiktok:document.getElementById('uf-tiktok').value.trim(),
+    youtube:document.getElementById('uf-youtube').value.trim(),other:document.getElementById('uf-other').value.trim(),
+    discount:parseFloat(document.getElementById('uf-disc').value)||10,costBooks:parseCur(document.getElementById('uf-books').value),
+    costFreight:parseCur(document.getElementById('uf-freight').value),startDate:document.getElementById('uf-date').value,status:document.getElementById('uf-status').value};
+  if(!d.name||!d.code)return alert('Nome e código são obrigatórios.');
+  if(!window.state.ugcCreators)window.state.ugcCreators=[];
+  if(id)window.state.ugcCreators=window.state.ugcCreators.map(c=>c.id===id?{...c,...d}:c);
+  else window.state.ugcCreators.push({...d,id:genId()});
+  saveState('ugcCreators');closeModal();renderUgc();toast(id?'Influenciador atualizado!':'Influenciador cadastrado!');
+};
 window.delUgc=function(id){if(!confirm('Excluir criador?'))return;window.state.ugcCreators=window.state.ugcCreators.filter(c=>c.id!==id);saveState('ugcCreators');renderUgc();};
 
 // ── PARTNERS CONFIG (inside config page) ─────────────────────────────────
