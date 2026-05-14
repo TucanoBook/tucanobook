@@ -318,7 +318,7 @@ function stopListeners(){_rtListeners.forEach(u=>u());_rtListeners=[];}
 
 async function loadState(){
   setLoadMsg('Carregando dados...');
-  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}]};
+  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}],compraItems:[]};
   // First load: get current data
   await Promise.all(Object.keys(defs).map(async key=>{
     try{const s=await getDoc(doc(db,COLL,key));window.state[key]=s.exists()?s.data().items:defs[key];}
@@ -328,7 +328,7 @@ async function loadState(){
 
 function setupRealtime(){
   stopListeners();
-  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}]};
+  const defs={books:BOOKS0,clients:[],suppliers:[],movements:[],kits:[],expenses:[],expenseCategories:['Custos Fixos','Compra de Estoque','Frete de Compra','Marketing / UGC','Shopify / Taxas','Embalagem','Outros'],ugcCreators:[],partners:[{id:'p1',name:'Sócio 1',email:'',share:50},{id:'p2',name:'Sócio 2',email:'',share:50}],compraItems:[]};
   let _firstLoad={};
   Object.keys(defs).forEach(key=>{
     _firstLoad[key]=true;
@@ -1327,8 +1327,7 @@ window.confirmShopifyImport=function(){
   toast(imported+' importado(s)'+(skipped?' | '+skipped+' ignorado(s)':'')+'!');renderMovimentos();
 };
 
-// _compraItems = [{id, label, isKit, qty}]
-if(!window._compraItems)window._compraItems=[];
+// compraItems = [{id, label, isKit, qty}] — salvo no Firebase
 
 window.addCompraItem=function(){
   var S=window.state;
@@ -1340,19 +1339,19 @@ window.addCompraItem=function(){
   var qty=parseInt(document.getElementById('compra-qty')?.value)||1;
   if(!selId)return;
   var isKit=selId.startsWith('kit-');
-  var existing=window._compraItems.findIndex(function(i){return i.id===selId;});
-  if(existing>=0){window._compraItems[existing].qty+=qty;}
-  else{window._compraItems.push({id:selId,label:selLbl,isKit:isKit,qty:qty});}
-  renderCompras();
+  var existing=window.state.compraItems.findIndex(function(i){return i.id===selId;});
+  if(existing>=0){window.state.compraItems[existing].qty+=qty;}
+  else{window.state.compraItems.push({id:selId,label:selLbl,isKit:isKit,qty:qty});}
+  saveState('compraItems');renderCompras();
 };
 
 window.removeCompraItem=function(idx){
-  window._compraItems.splice(idx,1);renderCompras();
+  window.state.compraItems.splice(idx,1);saveState('compraItems');renderCompras();
 };
 
 function renderCompras(){
   var S=window.state;
-  if(!window._compraItems)window._compraItems=[];
+  if(!window.state.compraItems)window.state.compraItems=[];
 
   // Build allOpts for ssHtml
   var allOpts=[];
@@ -1362,7 +1361,7 @@ function renderCompras(){
   // Compute totals and origins (books only — kits explode into components)
   var totals={};
   var origins={}; // bookId -> [{kitName, qty}]
-  window._compraItems.forEach(function(item){
+  window.state.compraItems.forEach(function(item){
     if(item.isKit){
       var kid=item.id.replace('kit-','');
       var kit=S.kits.find(function(k){return k.id===kid;});
@@ -1380,13 +1379,13 @@ function renderCompras(){
   var hasItems=Object.keys(totals).length>0;
 
   // Render item rows
-  var itemRows=window._compraItems.map(function(item,idx){
+  var itemRows=window.state.compraItems.map(function(item,idx){
     var isKit=item.isKit;
     var sub='';
     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f8fafc;border-radius:8px;margin-bottom:6px">'
       +'<div style="flex:1"><span style="font-size:13px;font-weight:500">'+item.label+'</span>'+sub+'</div>'
       +'<div style="display:flex;align-items:center;gap:6px">'
-      +'<input type="number" min="1" value="'+item.qty+'" oninput="window._compraItems['+idx+'].qty=parseInt(this.value)||1;renderCompras()" style="width:60px;padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;text-align:center">'
+      +'<input type="number" min="1" value="'+item.qty+'" oninput="window.state.compraItems['+idx+'].qty=parseInt(this.value)||1;saveState(\'compraItems\');renderCompras()" style="width:60px;padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;text-align:center">'
       +'<button onclick="removeCompraItem('+idx+')" style="background:#fee2e2;border:none;border-radius:7px;padding:5px 9px;cursor:pointer;color:#dc2626;font-size:14px">✕</button>'
       +'</div></div>';
   }).join('');
@@ -1399,8 +1398,8 @@ function renderCompras(){
     +'<input type="number" id="compra-qty" value="1" min="1" style="padding:9px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;text-align:center">'
     +'<button class="btn" onclick="addCompraItem()">+ Adicionar</button>'
     +'</div>'
-    +(window._compraItems.length>0
-      ?itemRows+'<button class="btn btn-gray btn-sm" onclick="window._compraItems=[];renderCompras()" style="margin-top:4px">🗑️ Limpar tudo</button>'
+    +(window.state.compraItems.length>0
+      ?itemRows+'<button class="btn btn-gray btn-sm" onclick="window.state.compraItems=[];saveState(\'compraItems\');renderCompras()" style="margin-top:4px">🗑️ Limpar tudo</button>'
       :'<div style="font-size:12px;color:var(--muted)">Busque um kit ou livro e clique em + Adicionar.</div>')
     +'</div>'
     +(hasItems
@@ -1444,13 +1443,13 @@ function renderCompras(){
           return acc+toComprar*((b.costPrice||0)+(b.freightUSA!=null?b.freightUSA:5.50));
         },0))+'</td>'
         +'</tr></tbody></table></div>'
-      :(window._compraItems.length>0?'':''));
+      :(window.state.compraItems.length>0?'':''));
 }
 
 window.exportComprasXLSX=function(){
   var S=window.state;
   var totals={};var origins={};
-  (window._compraItems||[]).forEach(function(item){
+  (window.state.compraItems||[]).forEach(function(item){
     if(item.isKit){
       var kid=item.id.replace('kit-','');
       var kit=S.kits.find(function(k){return k.id===kid;});
