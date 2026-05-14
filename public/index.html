@@ -6,6 +6,7 @@
 <link rel="manifest" href="/manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Sora',sans-serif;background:#f0f4f8;color:#1a2332;height:100vh;overflow:hidden}
@@ -1326,41 +1327,92 @@ window.confirmShopifyImport=function(){
   toast(imported+' importado(s)'+(skipped?' | '+skipped+' ignorado(s)':'')+'!');renderMovimentos();
 };
 
+// _compraItems = [{id, label, isKit, qty}]
+if(!window._compraItems)window._compraItems=[];
+
+window.addCompraItem=function(){
+  var S=window.state;
+  var allOpts=[];
+  S.kits.forEach(function(k){allOpts.push({value:'kit-'+k.id,label:'🎁 '+k.name,isKit:true});});
+  S.books.forEach(function(b){allOpts.push({value:b.id,label:'📚 '+b.title,isKit:false});});
+  var selId=document.getElementById('compra-sel')?.value;
+  var selLbl=document.getElementById('compra-sel-txt')?.value;
+  var qty=parseInt(document.getElementById('compra-qty')?.value)||1;
+  if(!selId)return;
+  var isKit=selId.startsWith('kit-');
+  var existing=window._compraItems.findIndex(function(i){return i.id===selId;});
+  if(existing>=0){window._compraItems[existing].qty+=qty;}
+  else{window._compraItems.push({id:selId,label:selLbl,isKit:isKit,qty:qty});}
+  renderCompras();
+};
+
+window.removeCompraItem=function(idx){
+  window._compraItems.splice(idx,1);renderCompras();
+};
+
 function renderCompras(){
-  const S=window.state;
-  if(!window._compraQtds)window._compraQtds={};
-  const totals={};
-  S.kits.forEach(kit=>{
-    const qty=parseInt(window._compraQtds[kit.id])||0;
-    if(qty>0){
-      kit.items.forEach(item=>{
-        totals[item.bookId]=(totals[item.bookId]||0)+item.quantity*qty;
-      });
+  var S=window.state;
+  if(!window._compraItems)window._compraItems=[];
+
+  // Build allOpts for ssHtml
+  var allOpts=[];
+  S.kits.forEach(function(k){allOpts.push({value:'kit-'+k.id,label:'🎁 '+k.name});});
+  S.books.forEach(function(b){allOpts.push({value:b.id,label:'📚 '+b.title});});
+
+  // Compute totals and origins (books only — kits explode into components)
+  var totals={};
+  var origins={}; // bookId -> [{kitName, qty}]
+  window._compraItems.forEach(function(item){
+    if(item.isKit){
+      var kid=item.id.replace('kit-','');
+      var kit=S.kits.find(function(k){return k.id===kid;});
+      if(kit){kit.items.forEach(function(ci){
+        totals[ci.bookId]=(totals[ci.bookId]||0)+ci.quantity*item.qty;
+        if(!origins[ci.bookId])origins[ci.bookId]=[];
+        origins[ci.bookId].push({kitName:item.label.replace(/^🎁 /,''),qty:ci.quantity*item.qty});
+      });}
+    } else {
+      totals[item.id]=(totals[item.id]||0)+item.qty;
+      if(!origins[item.id])origins[item.id]=[];
+      origins[item.id].push({kitName:'Direto',qty:item.qty});
     }
   });
-  const hasItems=Object.keys(totals).length>0;
+  var hasItems=Object.keys(totals).length>0;
+
+  // Render item rows
+  var itemRows=window._compraItems.map(function(item,idx){
+    var isKit=item.isKit;
+    var sub='';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f8fafc;border-radius:8px;margin-bottom:6px">'
+      +'<div style="flex:1"><span style="font-size:13px;font-weight:500">'+item.label+'</span>'+sub+'</div>'
+      +'<div style="display:flex;align-items:center;gap:6px">'
+      +'<input type="number" min="1" value="'+item.qty+'" oninput="window._compraItems['+idx+'].qty=parseInt(this.value)||1;renderCompras()" style="width:60px;padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;text-align:center">'
+      +'<button onclick="removeCompraItem('+idx+')" style="background:#fee2e2;border:none;border-radius:7px;padding:5px 9px;cursor:pointer;color:#dc2626;font-size:14px">✕</button>'
+      +'</div></div>';
+  }).join('');
+
   document.getElementById('content').innerHTML=
     '<div class="card" style="margin-bottom:14px">'
-    +'<div style="font-size:13px;font-weight:600;margin-bottom:12px">📦 Quantidades de Kits a Comprar</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">'
-    +S.kits.map(kit=>
-      '<div style="background:#f8fafc;border-radius:10px;padding:12px;border:1px solid var(--border)">'
-      +'<div style="font-size:13px;font-weight:600;margin-bottom:8px">🎁 '+kit.name+'</div>'
-      +'<div style="display:flex;align-items:center;gap:8px">'
-      +'<label style="font-size:12px;color:var(--sub)">Qtd:</label>'
-      +'<input type="number" min="0" value="'+(window._compraQtds[kit.id]||0)+'" oninput="window._compraQtds[\''+kit.id+'\']=parseInt(this.value)||0;renderCompras()" style="width:70px;padding:6px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;text-align:center">'
-      +'</div></div>'
-    ).join('')
+    +'<div style="font-size:13px;font-weight:600;margin-bottom:12px">🛒 Adicionar Kits ou Livros</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 80px auto;gap:8px;align-items:end;margin-bottom:12px">'
+    +'<div>'+ssHtml('compra-sel',allOpts,'Buscar kit ou livro...')+'</div>'
+    +'<input type="number" id="compra-qty" value="1" min="1" style="padding:9px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;text-align:center">'
+    +'<button class="btn" onclick="addCompraItem()">+ Adicionar</button>'
     +'</div>'
-    +'<div style="display:flex;gap:10px;margin-top:14px">'
-    +'<button class="btn" onclick="window._compraQtds={};renderCompras()">🗑️ Limpar</button>'
-    +'</div></div>'
+    +(window._compraItems.length>0
+      ?itemRows+'<button class="btn btn-gray btn-sm" onclick="window._compraItems=[];renderCompras()" style="margin-top:4px">🗑️ Limpar tudo</button>'
+      :'<div style="font-size:12px;color:var(--muted)">Busque um kit ou livro e clique em + Adicionar.</div>')
+    +'</div>'
     +(hasItems
       ?'<div class="card">'
-        +'<div style="font-size:13px;font-weight:600;margin-bottom:12px">📋 Lista de Compras — Livros Necessários</div>'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+        +'<div style="font-size:13px;font-weight:600">📋 Livros Necessários</div>'
+        +'<button class="btn btn-sm" onclick="exportComprasXLSX()" style="font-size:12px;padding:6px 12px">⬇ Exportar XLSX</button>'
+        +'</div>'
         +'<table style="width:100%;border-collapse:collapse;font-size:13px">'
         +'<thead><tr style="background:#f8fafc;border-bottom:2px solid var(--border)">'
         +'<th style="padding:10px 14px;text-align:left">Livro</th>'
+        +'<th style="padding:10px 14px;text-align:left">Origem</th>'
         +'<th style="padding:10px 14px;text-align:center">Necessário</th>'
         +'<th style="padding:10px 14px;text-align:center">Em Estoque</th>'
         +'<th style="padding:10px 14px;text-align:center">A Comprar</th>'
@@ -1371,8 +1423,12 @@ function renderCompras(){
           var b=S.books.find(function(bk){return bk.id===bookId;});if(!b)return'';
           var toComprar=Math.max(0,needed-b.stock);
           var effCost=(b.costPrice||0)+(b.freightUSA!=null?b.freightUSA:5.50);
+          var origList=(origins[bookId]||[]).map(function(o){
+            return'<div style="font-size:11px;color:var(--sub);white-space:nowrap">'+o.kitName+' <span style="background:#e0e7ff;color:#4f46e5;border-radius:4px;padding:1px 5px;font-weight:600">×'+o.qty+'</span></div>';
+          }).join('');
           return'<tr style="border-bottom:1px solid #f1f5f9">'
             +'<td style="padding:10px 14px;font-weight:500">'+b.title+'<div style="font-size:11px;color:var(--sub)">'+b.author+'</div></td>'
+            +'<td style="padding:10px 14px">'+origList+'</td>'
             +'<td style="padding:10px 14px;text-align:center"><span class="badge badge-indigo">'+needed+'</span></td>'
             +'<td style="padding:10px 14px;text-align:center"><span class="badge '+(b.stock>=needed?'badge-green':b.stock>0?'badge-amber':'badge-red')+'">'+b.stock+'</span></td>'
             +'<td style="padding:10px 14px;text-align:center"><span class="badge '+(toComprar>0?'badge-red':'badge-green')+'">'+toComprar+'</span></td>'
@@ -1380,7 +1436,7 @@ function renderCompras(){
             +'</tr>';
         }).join('')
         +'<tr style="background:#f8fafc;border-top:2px solid var(--border);font-weight:600">'
-        +'<td colspan="4" style="padding:10px 14px">Total estimado a comprar</td>'
+        +'<td colspan="5" style="padding:10px 14px">Total estimado</td>'
         +'<td style="padding:10px 14px;text-align:right">'+BRL(Object.entries(totals).reduce(function(acc,entry){
           var bookId=entry[0],needed=entry[1];
           var b=S.books.find(function(bk){return bk.id===bookId;});if(!b)return acc;
@@ -1388,8 +1444,44 @@ function renderCompras(){
           return acc+toComprar*((b.costPrice||0)+(b.freightUSA!=null?b.freightUSA:5.50));
         },0))+'</td>'
         +'</tr></tbody></table></div>'
-      :'<div class="card" style="text-align:center;padding:52px;color:var(--muted)">Digite a quantidade de kits acima para calcular os livros necessários.</div>');
+      :(window._compraItems.length>0?'':''));
 }
+
+window.exportComprasXLSX=function(){
+  var S=window.state;
+  var totals={};var origins={};
+  (window._compraItems||[]).forEach(function(item){
+    if(item.isKit){
+      var kid=item.id.replace('kit-','');
+      var kit=S.kits.find(function(k){return k.id===kid;});
+      if(kit){kit.items.forEach(function(ci){
+        totals[ci.bookId]=(totals[ci.bookId]||0)+ci.quantity*item.qty;
+        if(!origins[ci.bookId])origins[ci.bookId]=[];
+        origins[ci.bookId].push(item.label.replace(/^🎁 /,'')+' ×'+(ci.quantity*item.qty));
+      });}
+    } else {
+      totals[item.id]=(totals[item.id]||0)+item.qty;
+      if(!origins[item.id])origins[item.id]=[];
+      origins[item.id].push('Direto ×'+item.qty);
+    }
+  });
+  var rows=[['Livro','Autor','Origem','Necessário','Em Estoque','A Comprar','Custo Unit. (US$)','Custo Est. (US$)']];
+  var totalCost=0;
+  Object.entries(totals).forEach(function(entry){
+    var bookId=entry[0],needed=entry[1];
+    var b=S.books.find(function(bk){return bk.id===bookId;});if(!b)return;
+    var toComprar=Math.max(0,needed-b.stock);
+    var effCost=(b.costPrice||0)+(b.freightUSA!=null?b.freightUSA:5.50);
+    var custo=toComprar>0?toComprar*effCost:0;
+    totalCost+=custo;
+    rows.push([b.title,b.author||'',(origins[bookId]||[]).join(' | '),needed,b.stock,toComprar,effCost,custo>0?custo:0]);
+  });
+  rows.push(['','','','','','','Total',totalCost]);
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Lista de Compras');
+  XLSX.writeFile(wb,'lista-compras-'+new Date().toISOString().slice(0,10)+'.xlsx');
+};
 
 function renderPage(p){
   const map={dashboard:renderDashboard,livros:renderLivros,movimentos:window.renderMovimentos,kits:window.renderKits,clientes:renderClientes,fornecedores:renderFornecedores,despesas:renderDespesas,relatorios:renderRelatorios,ugc:renderUgc,config:renderConfig,compras:renderCompras};
