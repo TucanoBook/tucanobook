@@ -403,6 +403,7 @@ const PAGES={
   livros:{icon:'📚',label:'Catálogo',section:'Estoque',sub:'Gerencie seu acervo'},
   movimentos:{icon:'🔄',label:'Entradas/Saídas',section:'Estoque',sub:'Compras e vendas'},
   kits:{icon:'🎁',label:'Kits',section:'Estoque',sub:'Montar e vender kits'},
+  compras:{icon:'🛒',label:'Lista de Compras',section:'Estoque',sub:'Calcular necessidade de livros'},
   clientes:{icon:'👥',label:'Clientes',section:'Comercial',sub:'Cadastro e histórico'},
   fornecedores:{icon:'🏭',label:'Fornecedores',section:'Comercial',sub:'Cadastro de fornecedores'},
   despesas:{icon:'💸',label:'Despesas',section:'Financeiro',sub:'Controle de gastos'},
@@ -410,7 +411,7 @@ const PAGES={
   ugc:{icon:'🎯',label:'Criadores UGC',section:'Marketing',sub:'Influencers e códigos de desconto'},
   config:{icon:'⚙️',label:'Configurações',section:'Sistema',sub:'Usuários, categorias e dados'},
 };
-const SECTIONS={Principal:['dashboard'],Estoque:['livros','movimentos','kits'],Comercial:['clientes','fornecedores'],Financeiro:['despesas','relatorios'],Sistema:['config']};
+const SECTIONS={Principal:['dashboard'],Estoque:['livros','movimentos','kits','compras'],Comercial:['clientes','fornecedores'],Financeiro:['despesas','relatorios'],Sistema:['config']};
 let curPage='dashboard';
 
 function buildNav(){
@@ -467,16 +468,21 @@ window.openBookModal=function(book=null){
     ${fg('Título *',inp('f-title','text',book?.title||''))}
     ${fg('Autor *',inp('f-author','text',book?.author||''))}
     <div class="grid2">${fg('ISBN',inp('f-isbn','text',book?.isbn||''))}${fg('Categoria',sel('f-cat',BCATS,book?.category||'Literatura'))}</div>
-    <div class="grid3">
+    <div class="grid2">
       ${fg('Preço de Custo (R$)',cinp('f-cost',book?.costPrice||0))}
       ${fg('Preço de Venda (R$)',cinp('f-sale',book?.salePrice||0))}
-      ${fg('Estoque',inp('f-stock','number',book?.stock??'0','0'))}
     </div>
+    <div class="grid2">
+      ${fg('Frete EUA ($/un)',cinp('f-freight-usa',book?.freightUSA??5.50))}
+      ${fg('Peso (kg/un)',inp('f-weight','number',book?.weight??0,'0'))}
+    </div>
+    <div style="font-size:11px;color:var(--sub);margin-top:-8px;margin-bottom:4px">Frete dentro dos EUA (padrão $5,50)</div>
+    ${fg('Estoque',inp('f-stock','number',book?.stock??'0','0'))}
     <div class="calc-box" id="book-calc">Digite custo e venda para calcular margem e markup.</div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveBook('${book?.id||''}')">Salvar</button></div>`,false);
   updateCalc();
 };
-window.saveBook=function(id){const d={title:document.getElementById('f-title').value.trim(),author:document.getElementById('f-author').value.trim(),isbn:document.getElementById('f-isbn').value.trim(),category:document.getElementById('f-cat').value,costPrice:parseCur(document.getElementById('f-cost').value),salePrice:parseCur(document.getElementById('f-sale').value),stock:parseInt(document.getElementById('f-stock').value)||0};if(!d.title||!d.author)return alert('Título e autor são obrigatórios.');if(id)window.state.books=window.state.books.map(b=>b.id===id?{...b,...d}:b);else window.state.books.push({...d,id:genId()});saveState('books');closeModal();renderLivros();toast(id?'Livro atualizado!':'Livro cadastrado!');};
+window.saveBook=function(id){const d={title:document.getElementById('f-title').value.trim(),author:document.getElementById('f-author').value.trim(),isbn:document.getElementById('f-isbn').value.trim(),category:document.getElementById('f-cat').value,costPrice:parseCur(document.getElementById('f-cost').value),salePrice:parseCur(document.getElementById('f-sale').value),freightUSA:parseCur(document.getElementById('f-freight-usa').value)||5.50,weight:parseFloat(document.getElementById('f-weight').value)||0,stock:parseInt(document.getElementById('f-stock').value)||0};if(!d.title||!d.author)return alert('Título e autor são obrigatórios.');if(id)window.state.books=window.state.books.map(b=>b.id===id?{...b,...d}:b);else window.state.books.push({...d,id:genId()});saveState('books');closeModal();renderLivros();toast(id?'Livro atualizado!':'Livro cadastrado!');};
 window.delBook=function(id){if(!confirm('Excluir este livro?'))return;window.state.books=window.state.books.filter(b=>b.id!==id);saveState('books');renderLivros();toast('Livro removido.','error');};
 
 // ── MOVIMENTOS ───────────────────────────────────────────────────────────
@@ -565,7 +571,10 @@ window.setKitFilter=function(f){
   renderKits();
 };
 window.renderKits=function(){
-  const kCost=kit=>{const bom=kit.items.reduce((a,i)=>{const b=window.state.books.find(bk=>bk.id===i.bookId);return a+(b?b.costPrice*i.quantity:0);},0);return bom>0?bom:(parseCur(kit.costPrice)||0);};
+  const kCost=kit=>{
+    const bom=kit.items.reduce((a,i)=>{const b=window.state.books.find(bk=>bk.id===i.bookId);return a+(b?((b.costPrice||0)+(b.freightUSA??5.50))*i.quantity:0);},0);
+    return (bom>0?bom:(parseCur(kit.costPrice)||0))+(parseCur(kit.packagingCost)||0);
+  };
   let filteredKits=[...window.state.kits];
   const kSalesCount=kit=>window.state.movements.filter(m=>m.type==='saida'&&m.bookId===`kit-${kit.id}`).reduce((a,m)=>a+m.quantity,0);
   const kProfit=kit=>{const cost=kCost(kit);return(parseCur(kit.salePrice)-cost)*kSalesCount(kit);};
@@ -650,6 +659,8 @@ window.openKitModal=function(kit=null){
     ${fg('Nome do Kit *',inp('kf-name','text',kit?.name||''))}
     ${fg('Descrição',inp('kf-desc','text',kit?.description||'','Descrição do kit'))}
     ${fg('Preço de Venda (R$) *',cinp('kf-price',kit?.salePrice||0))}
+    ${fg('Custo de Embalagem ($)',cinp('kf-packaging',kit?.packagingCost||0))}
+    <div style="font-size:11px;color:var(--sub);margin-top:-8px;margin-bottom:4px">Caixa, fita, proteção, etc. por kit</div>
     <div class="calc-box warn" id="kit-calc">Adicione livros para calcular o custo.</div>
     <div style="font-size:13px;font-weight:600;margin:4px 0 8px">📚 Livros do Kit</div>
     <div style="display:flex;gap:8px;margin-bottom:10px"><select id="kf-book" onchange="updateKitCalc()" style="flex:2;padding:9px 11px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'Sora',sans-serif;outline:none"><option value="">Selecione um livro...</option>${window.state.books.map(b=>`<option value="${b.id}">${b.title} (est: ${b.stock})</option>`).join('')}</select><input type="number" id="kf-qty" value="1" min="1" style="width:64px;padding:9px 8px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'Sora',sans-serif;outline:none;text-align:center"><button class="btn btn-sm btn-green" onclick="addKitItem()">+ Add</button></div>
@@ -663,7 +674,7 @@ function renderKitItemsList(){const el=document.getElementById('kit-items-list')
 window.addKitItem=function(){const bookId=document.getElementById('kf-book').value,qty=parseInt(document.getElementById('kf-qty').value)||1;if(!bookId)return;const ex=window._kitItems.findIndex(i=>i.bookId===bookId);if(ex>=0)window._kitItems[ex].quantity+=qty;else window._kitItems.push({bookId,quantity:qty});renderKitItemsList();updateKitCalc();};
 window.removeKitItem=function(i){window._kitItems.splice(i,1);renderKitItemsList();updateKitCalc();};
 window.saveKit=function(id){
-  const d={name:document.getElementById('kf-name').value.trim(),description:document.getElementById('kf-desc').value,salePrice:parseCur(document.getElementById('kf-price').value),items:[...window._kitItems]};
+  const d={name:document.getElementById('kf-name').value.trim(),description:document.getElementById('kf-desc').value,salePrice:parseCur(document.getElementById('kf-price').value),packagingCost:parseCur(document.getElementById('kf-packaging').value)||0,items:[...window._kitItems]};
   if(!d.name||!d.salePrice)return alert('Preencha nome e preço.');if(d.items.length===0)return alert('Adicione pelo menos um livro.');
   if(id){window.state.kits=window.state.kits.map(k=>k.id===id?{...k,...d}:k);}
   else{
@@ -1034,7 +1045,7 @@ window.openPartnerModal=function(){const partners=window.state.partners||[{id:'p
   <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="savePartners(${partners.length})">Salvar</button></div>`);};
 window.savePartners=function(n){const partners=[];let total=0;for(let i=0;i<n;i++){const share=parseFloat(document.getElementById('pf-share-'+i)?.value)||50;total+=share;partners.push({id:'p'+(i+1),name:document.getElementById('pf-name-'+i)?.value||'Sócio '+(i+1),email:document.getElementById('pf-email-'+i)?.value||'',share});}if(Math.abs(total-100)>0.01)return alert('As participações devem somar 100%. Total atual: '+total+'%');window.state.partners=partners;saveState('partners');closeModal();renderConfig();toast('Sócios atualizados!');};
 
-window.renderDashboard=renderDashboard;window.renderLivros=renderLivros;window.renderClientes=renderClientes;window.renderFornecedores=renderFornecedores;window.renderDespesas=renderDespesas;window.renderRelatorios=renderRelatorios;window.renderConfig=renderConfig;window.saveState=saveState;
+window.renderDashboard=renderDashboard;window.renderLivros=renderLivros;window.renderClientes=renderClientes;window.renderFornecedores=renderFornecedores;window.renderDespesas=renderDespesas;window.renderRelatorios=renderRelatorios;window.renderConfig=renderConfig;window.renderCompras=renderCompras;window.saveState=saveState;
 
 // ── SEARCHABLE SELECT ────────────────────────────────────────────────────
 function ssHtml(id,options,placeholder){
@@ -1073,20 +1084,32 @@ window.openMovModal=function(type){
   var clientOpts=S.clients.map(function(c){return{value:c.id,label:c.name+(c.email?' - '+c.email:'')};});
   var supplierOpts=S.suppliers.map(function(s){return{value:s.id,label:s.name};});
   var titles={saida:'📤 Saida / Venda',entrada:'📥 Entrada / Compra',brinde:'🎁 Brinde / UGC',perda:'📉 Perda / Avaria'};
-  var itemRow='<div style="display:grid;grid-template-columns:1fr 70px 110px;gap:6px;margin-bottom:8px" id="mov-item-0">'
+  var gridCols=type==='entrada'?'1fr 60px 100px 60px':'1fr 70px 110px';
+  var itemRow='<div style="display:grid;grid-template-columns:'+gridCols+';gap:6px;margin-bottom:8px" id="mov-item-0">'
     +'<div>'+ssHtml('ms-book-0',allItems,'Buscar produto ou kit...')+'</div>'
     +'<input type="number" id="ms-qty-0" value="1" min="1" oninput="calcMovTotal()" style="padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;text-align:center">'
     +'<div style="position:relative"><span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:11px">$</span>'
-    +'<input type="number" id="ms-price-0" step="0.01" placeholder="0.00" oninput="calcMovTotal()" style="padding:7px 7px 7px 18px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:100%"></div></div>';
+    +'<input type="number" id="ms-price-0" step="0.01" placeholder="0.00" oninput="calcMovTotal()" style="padding:7px 7px 7px 18px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:100%"></div>'
+    +(type==='entrada'?'<input type="number" id="ms-weight-0" value="0" step="0.01" placeholder="kg" title="Peso por unidade (kg)" oninput="calcMovTotal()" style="padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;text-align:center">':'')
+    +'</div>';
+  var itemHeader=type==='entrada'
+    ?'<div style="display:grid;grid-template-columns:1fr 60px 100px 60px;gap:6px;margin-bottom:2px"><span style="font-size:10px;color:var(--sub)">Produto</span><span style="font-size:10px;color:var(--sub);text-align:center">Qtd</span><span style="font-size:10px;color:var(--sub)">Preço un.</span><span style="font-size:10px;color:var(--sub);text-align:center">kg/un</span></div>'
+    :'';
   var addBtn=(type!=='brinde')?'<button onclick="addMovItem()" style="width:100%;padding:6px;border:1.5px dashed var(--border);border-radius:8px;background:none;cursor:pointer;font-size:12px;color:var(--sub);margin-bottom:10px;font-family:inherit">+ Adicionar produto</button>':'';
   var extra='';
   if(type==='saida')extra=fg('Cliente',ssHtml('ms-client',clientOpts,'Buscar cliente...','openClientModal()'))+'<div class="grid2">'+fg('Codigo UGC',inp('ms-ugc','text','','Ex: RAY10'))+fg('Desconto %',inp('ms-disc','number','0'))+'</div>';
-  else if(type==='entrada')extra=fg('Fornecedor',ssHtml('ms-supplier',supplierOpts,'Buscar fornecedor...','openSupModal()'))+'<div class="grid2">'+fg('Frete Import. EUA ($)',cinp('ms-frete-import',0))+fg('Frete Brasil ($)',cinp('ms-frete-br',0))+'</div>';
+  else if(type==='entrada')extra=fg('Fornecedor',ssHtml('ms-supplier',supplierOpts,'Buscar fornecedor...'))
+    +'<div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">'
+    +'<div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--sub)">📦 CALCULADORA DE FRETE</div>'
+    +'<div class="grid3">'+fg('Frete BR Total ($)',cinp('ms-frete-br-total',0))+fg('Peso total caixa (kg)',inp('ms-box-weight','number','0','0'))+fg('Frete EUA/un (def. $5,50)',cinp('ms-frete-usa-unit',5.50))+'</div>'
+    +'<div style="font-size:11px;color:var(--sub);margin-top:-4px">Preencha o peso de cada item na linha acima (coluna kg/un). O frete BR será dividido proporcionalmente pelo peso.</div>'
+    +'<div class="calc-box" id="frete-calc-result" style="margin-top:8px;display:none"></div>'
+    +'</div>';
   else if(type==='brinde')extra='<div class="grid2">'+fg('Criador',inp('ms-ugc-name','text','','Nome'))+fg('Codigo UGC',inp('ms-ugc','text','','RAY10'))+'</div>'+fg('Frete Brasil ($)',cinp('ms-frete-br',0));
   else if(type==='perda')extra=fg('Motivo',inp('ms-motivo','text','','Ex: Danificado'));
   var html='<input type="hidden" id="ms-type" value="'+type+'">'
     +'<div style="font-size:11px;font-weight:600;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Produtos / Kits</div>'
-    +'<div id="mov-items-wrap">'+itemRow+'</div>'+addBtn
+    +itemHeader+'<div id="mov-items-wrap">'+itemRow+'</div>'+addBtn
     +'<div class="mov-total" id="ms-total-bar"></div>'
     +extra+fg('Data',inp('ms-date','date',today()))+fg('Obs.',inp('ms-notes','text','','Opcional'))
     +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveMov2()">✅ Registrar</button></div>';
@@ -1095,19 +1118,23 @@ window.openMovModal=function(type){
 window.addMovItem=function(){
   var wrap=document.getElementById('mov-items-wrap');if(!wrap)return;
   var idx=wrap.children.length;
+  var type=(document.getElementById('ms-type')||{value:'saida'}).value;
   var S=window.state,allItems=[];
   S.kits.forEach(function(k){allItems.push({value:'kit-'+k.id,label:'🎁 '+k.name});});
   S.books.forEach(function(b){allItems.push({value:b.id,label:'📚 '+b.title});});
   var d=document.createElement('div');
-  d.style.cssText='display:grid;grid-template-columns:1fr 70px 110px 28px;gap:6px;margin-bottom:8px';
+  var gridCols=type==='entrada'?'1fr 60px 100px 60px 28px':'1fr 70px 110px 28px';
+  d.style.cssText='display:grid;grid-template-columns:'+gridCols+';gap:6px;margin-bottom:8px';
   d.innerHTML='<div>'+ssHtml('ms-book-'+idx,allItems,'Produto...')+'</div>'
     +'<input type="number" id="ms-qty-'+idx+'" value="1" min="1" oninput="calcMovTotal()" style="padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;text-align:center">'
     +'<div style="position:relative"><span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:11px">$</span><input type="number" id="ms-price-'+idx+'" step="0.01" placeholder="0.00" oninput="calcMovTotal()" style="padding:7px 7px 7px 18px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:100%"></div>'
+    +(type==='entrada'?'<input type="number" id="ms-weight-'+idx+'" value="0" step="0.01" placeholder="kg" oninput="calcMovTotal()" style="padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;text-align:center">':'')
     +'<button onclick="this.parentNode.remove();calcMovTotal()" style="background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:16px;margin-top:4px">x</button>';
   wrap.appendChild(d);
 };
 window.calcMovTotal=function(){
   var wrap=document.getElementById('mov-items-wrap');if(!wrap)return;
+  var type=(document.getElementById('ms-type')||{value:'saida'}).value;
   var total=0,lines=[];
   var n=wrap.children.length;
   for(var i=0;i<n;i++){
@@ -1116,7 +1143,32 @@ window.calcMovTotal=function(){
     if(qty>0&&price>0){total+=qty*price;lines.push(qty+'x $'+price.toFixed(2));}
   }
   var bar=document.getElementById('ms-total-bar');
-  if(bar){bar.style.display=total>0?'block':'none';bar.innerHTML='<strong>Total: '+BRL(total)+'</strong>'+(lines.length>1?' ('+lines.join(' + ')+')':'');}
+  if(bar){bar.style.display=total>0?'block':'none';bar.innerHTML='<strong>Total Produtos: '+BRL(total)+'</strong>'+(lines.length>1?' ('+lines.join(' + ')+')':'');}
+  if(type==='entrada'){
+    var totalBRFreight=parseCur((document.getElementById('ms-frete-br-total')||{value:'0'}).value)||0;
+    var totalBoxWeight=parseFloat((document.getElementById('ms-box-weight')||{value:'0'}).value)||0;
+    var result=document.getElementById('frete-calc-result');
+    if(result&&(totalBRFreight>0||totalBoxWeight>0)){
+      var rows=[];
+      var totalWeightCalc=0;
+      for(var j=0;j<n;j++){
+        var q=parseFloat((document.getElementById('ms-qty-'+j)||{value:'0'}).value)||0;
+        var w=parseFloat((document.getElementById('ms-weight-'+j)||{value:'0'}).value)||0;
+        if(q>0&&w>0)totalWeightCalc+=q*w;
+      }
+      for(var k=0;k<n;k++){
+        var bTxt=(document.getElementById('ms-book-'+k+'-txt')||{value:''}).value;
+        var q2=parseFloat((document.getElementById('ms-qty-'+k)||{value:'0'}).value)||0;
+        var w2=parseFloat((document.getElementById('ms-weight-'+k)||{value:'0'}).value)||0;
+        if(q2>0&&w2>0&&totalWeightCalc>0){
+          var unitFr=(w2/totalWeightCalc)*totalBRFreight;
+          rows.push((bTxt||'Item '+(k+1))+': $'+unitFr.toFixed(2)+'/un ('+w2+'kg × '+q2+'un)');
+        }
+      }
+      result.style.display='block';
+      result.innerHTML='<strong>📦 Frete BR alocado:</strong><br>Peso total: '+(totalWeightCalc||totalBoxWeight).toFixed(2)+'kg<br>'+rows.join('<br>');
+    } else if(result){result.style.display='none';}
+  }
 };
 window.saveMov2=function(){
   var type=(document.getElementById('ms-type')||{value:'saida'}).value;
@@ -1127,7 +1179,8 @@ window.saveMov2=function(){
     var bTxt=(document.getElementById('ms-book-'+i+'-txt')||{value:''}).value;
     var qty=parseInt((document.getElementById('ms-qty-'+i)||{value:'1'}).value)||1;
     var price=parseCur((document.getElementById('ms-price-'+i)||{value:'0'}).value)||0;
-    if(bId&&qty>0&&price>0)items.push({bookId:bId,bookTitle:bTxt,qty:qty,price:price});
+    var wt=parseFloat((document.getElementById('ms-weight-'+i)||{value:'0'}).value)||0;
+    if(bId&&qty>0&&price>0)items.push({bookId:bId,bookTitle:bTxt,qty:qty,price:price,weight:wt});
   }
   if(!items.length)return alert('Adicione pelo menos um produto.');
   var date=(document.getElementById('ms-date')||{value:today()}).value;
@@ -1141,6 +1194,9 @@ window.saveMov2=function(){
   var disc=parseFloat((document.getElementById('ms-disc')||{value:'0'}).value)||0;
   var fI=parseCur((document.getElementById('ms-frete-import')||{value:'0'}).value)||0;
   var fB=parseCur((document.getElementById('ms-frete-br')||{value:'0'}).value)||0;
+  var totalBRFreight=parseCur((document.getElementById('ms-frete-br-total')||{value:'0'}).value)||0;
+  var totalBoxWeight=parseFloat((document.getElementById('ms-box-weight')||{value:'0'}).value)||0;
+  var freightUSAUnit=parseCur((document.getElementById('ms-frete-usa-unit')||{value:'5.50'}).value)||5.50;
   var motivo=(document.getElementById('ms-motivo')||{value:''}).value||'';
   var ok=true;
   items.forEach(function(item){
@@ -1156,10 +1212,14 @@ window.saveMov2=function(){
     var kit=kid?window.state.kits.find(function(k){return k.id===kid;}):null;
     var book=!isKit?window.state.books.find(function(b){return b.id===item.bookId;}):null;
     var net=disc>0?item.price*(1-disc/100):item.price;
-    var cogs=isKit?(kit?(kit.costPrice||0)*item.qty:0):(book?(book.costPrice||0)*item.qty:0);
+    var totalItemWeight=items.reduce(function(a,it){return a+it.weight*it.qty;},0)||1;
+    var unitFreightBR=totalBRFreight>0&&item.weight>0?(item.weight/totalItemWeight)*totalBRFreight:0;
+    var baseCost=isKit?(kit?((parseCur(kit.costPrice)||0)+(parseCur(kit.packagingCost)||0)):0):(book?(book.costPrice||0):0);
+    var unitFreightUSA=isKit?0:(type==='entrada'?freightUSAUnit:(book?(book.freightUSA??5.50):5.50));
+    var cogs=(baseCost+unitFreightUSA+unitFreightBR)*item.qty;
     window.state.movements.push({id:genId(),type:type,bookId:item.bookId,bookTitle:item.bookTitle,
       quantity:item.qty,unitPrice:type==='entrada'?item.price:net,grossUnitPrice:item.price,
-      freightCost:fI+fB,freightImport:fI,freightBR:fB,supplierId:supplierId,
+      freightCost:fI+fB+totalBRFreight,freightImport:fI,freightBR:type==='entrada'?totalBRFreight:fB,supplierId:supplierId,
       supplierName:supplier?supplier.name:ugcName,clientId:clientId,clientName:client?client.name:'',
       ugcCode:ugc||ugcName,discountPct:disc,shopifyFee:0,cogs:cogs,date:date,
       notes:notes||(motivo?'Perda: '+motivo:''),source:'manual'});
@@ -1266,8 +1326,73 @@ window.confirmShopifyImport=function(){
   toast(imported+' importado(s)'+(skipped?' | '+skipped+' ignorado(s)':'')+'!');renderMovimentos();
 };
 
+function renderCompras(){
+  const S=window.state;
+  if(!window._compraQtds)window._compraQtds={};
+  const totals={};
+  S.kits.forEach(kit=>{
+    const qty=parseInt(window._compraQtds[kit.id])||0;
+    if(qty>0){
+      kit.items.forEach(item=>{
+        totals[item.bookId]=(totals[item.bookId]||0)+item.quantity*qty;
+      });
+    }
+  });
+  const hasItems=Object.keys(totals).length>0;
+  document.getElementById('content').innerHTML=
+    '<div class="card" style="margin-bottom:14px">'
+    +'<div style="font-size:13px;font-weight:600;margin-bottom:12px">📦 Quantidades de Kits a Comprar</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">'
+    +S.kits.map(kit=>
+      '<div style="background:#f8fafc;border-radius:10px;padding:12px;border:1px solid var(--border)">'
+      +'<div style="font-size:13px;font-weight:600;margin-bottom:8px">🎁 '+kit.name+'</div>'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<label style="font-size:12px;color:var(--sub)">Qtd:</label>'
+      +'<input type="number" min="0" value="'+(window._compraQtds[kit.id]||0)+'" oninput="window._compraQtds[\''+kit.id+'\']=parseInt(this.value)||0;renderCompras()" style="width:70px;padding:6px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;text-align:center">'
+      +'</div></div>'
+    ).join('')
+    +'</div>'
+    +'<div style="display:flex;gap:10px;margin-top:14px">'
+    +'<button class="btn" onclick="window._compraQtds={};renderCompras()">🗑️ Limpar</button>'
+    +'</div></div>'
+    +(hasItems
+      ?'<div class="card">'
+        +'<div style="font-size:13px;font-weight:600;margin-bottom:12px">📋 Lista de Compras — Livros Necessários</div>'
+        +'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+        +'<thead><tr style="background:#f8fafc;border-bottom:2px solid var(--border)">'
+        +'<th style="padding:10px 14px;text-align:left">Livro</th>'
+        +'<th style="padding:10px 14px;text-align:center">Necessário</th>'
+        +'<th style="padding:10px 14px;text-align:center">Em Estoque</th>'
+        +'<th style="padding:10px 14px;text-align:center">A Comprar</th>'
+        +'<th style="padding:10px 14px;text-align:right">Custo Est. ($)</th>'
+        +'</tr></thead><tbody>'
+        +Object.entries(totals).map(function(entry){
+          var bookId=entry[0],needed=entry[1];
+          var b=S.books.find(function(bk){return bk.id===bookId;});if(!b)return'';
+          var toComprar=Math.max(0,needed-b.stock);
+          var effCost=(b.costPrice||0)+(b.freightUSA!=null?b.freightUSA:5.50);
+          return'<tr style="border-bottom:1px solid #f1f5f9">'
+            +'<td style="padding:10px 14px;font-weight:500">'+b.title+'<div style="font-size:11px;color:var(--sub)">'+b.author+'</div></td>'
+            +'<td style="padding:10px 14px;text-align:center"><span class="badge badge-indigo">'+needed+'</span></td>'
+            +'<td style="padding:10px 14px;text-align:center"><span class="badge '+(b.stock>=needed?'badge-green':b.stock>0?'badge-amber':'badge-red')+'">'+b.stock+'</span></td>'
+            +'<td style="padding:10px 14px;text-align:center"><span class="badge '+(toComprar>0?'badge-red':'badge-green')+'">'+toComprar+'</span></td>'
+            +'<td style="padding:10px 14px;text-align:right">'+(toComprar>0?BRL(toComprar*effCost):'—')+'</td>'
+            +'</tr>';
+        }).join('')
+        +'<tr style="background:#f8fafc;border-top:2px solid var(--border);font-weight:600">'
+        +'<td colspan="4" style="padding:10px 14px">Total estimado a comprar</td>'
+        +'<td style="padding:10px 14px;text-align:right">'+BRL(Object.entries(totals).reduce(function(acc,entry){
+          var bookId=entry[0],needed=entry[1];
+          var b=S.books.find(function(bk){return bk.id===bookId;});if(!b)return acc;
+          var toComprar=Math.max(0,needed-b.stock);
+          return acc+toComprar*((b.costPrice||0)+(b.freightUSA!=null?b.freightUSA:5.50));
+        },0))+'</td>'
+        +'</tr></tbody></table></div>'
+      :'<div class="card" style="text-align:center;padding:52px;color:var(--muted)">Digite a quantidade de kits acima para calcular os livros necessários.</div>');
+}
+
 function renderPage(p){
-  const map={dashboard:renderDashboard,livros:renderLivros,movimentos:window.renderMovimentos,kits:window.renderKits,clientes:renderClientes,fornecedores:renderFornecedores,despesas:renderDespesas,relatorios:renderRelatorios,ugc:renderUgc,config:renderConfig};
+  const map={dashboard:renderDashboard,livros:renderLivros,movimentos:window.renderMovimentos,kits:window.renderKits,clientes:renderClientes,fornecedores:renderFornecedores,despesas:renderDespesas,relatorios:renderRelatorios,ugc:renderUgc,config:renderConfig,compras:renderCompras};
   if(map[p])map[p]();
 }
 
