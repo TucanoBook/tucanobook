@@ -390,7 +390,7 @@ const PAGES={
   ugc:{icon:'🎯',label:'Criadores UGC',section:'Marketing',sub:'Influencers e códigos de desconto'},
   config:{icon:'⚙️',label:'Configurações',section:'Sistema',sub:'Usuários, categorias e dados'},
 };
-const SECTIONS={Principal:['dashboard'],Estoque:['livros','movimentos','kits'],Comercial:['clientes','fornecedores'],Financeiro:['despesas','relatorios'],Sistema:['config']};
+const SECTIONS={Principal:['dashboard'],Estoque:['livros','movimentos','kits'],Comercial:['clientes','fornecedores'],Financeiro:['despesas','relatorios'],Marketing:['ugc'],Sistema:['config']};
 let curPage='dashboard';
 
 function buildNav(){
@@ -772,7 +772,6 @@ window.applyCostCalc=function(){
 };
 
 // Legacy stubs
-let movType='saida';
 window.setMovType=function(t){movType=t;};
 window.saveMov=function(){openMovModal('saida');};
 function updMovTotal(){}
