@@ -600,7 +600,7 @@ window.delMov=function(id){
   var isKit=mov.bookId&&mov.bookId.startsWith('kit-');
   var kid=isKit?mov.bookId.replace('kit-',''):'';
   if(mov.type==='entrada'){
-    if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:Math.max(0,(k.stock||0)-mov.quantity)}):k;});
+    if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)-mov.quantity)}):k;});
     else window.state.books=window.state.books.map(function(b){return b.id===mov.bookId?Object.assign({},b,{stock:b.stock-mov.quantity}):b;});
   }else{
     if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)+mov.quantity}):k;});
@@ -797,8 +797,8 @@ window.buildMoreKit=function(id){
 };
 window.confirmBuildMore=function(id){const kit=window.state.kits.find(k=>k.id===id),qty=parseInt(document.getElementById('bm-qty').value)||1;window.state.books=window.state.books.map(b=>{const item=kit.items.find(i=>i.bookId===b.id);return item?{...b,stock:b.stock-item.quantity*qty}:b;});window.state.kits=window.state.kits.map(k=>k.id===id?{...k,stock:(k.stock||0)+qty}:k);saveState('books');saveState('kits');closeModal();renderKits();toast(`${qty} kit(s) montado(s)!`);};
 window.delKit=function(id){if(!confirm('Excluir kit? (o estoque dos livros NÃO será devolvido)'))return;window.state.kits=window.state.kits.filter(k=>k.id!==id);saveState('kits');renderKits();};
-window.sellKit=function(id){const kit=window.state.kits.find(k=>k.id===id);if(!kit.stock)return alert('Sem estoque de kits!');openModal(`Vender Kit: ${kit.name}`,`${fg('Quantidade de kits',inp('sk-qty','number','1','1'))}<div class="fg"><label>Cliente</label><select id="sk-client" style="width:100%"><option value="">Sem cliente</option>${window.state.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></div>${fg('Data',inp('sk-date','date',today()))}<div class="alert alert-green">Preço unitário: <strong>${BRL(kit.salePrice)}</strong> | Estoque disponível: <strong>${kit.stock}</strong></div><div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn btn-green" onclick="confirmSellKit('${kit.id}')">Confirmar Venda</button></div>`);};
-window.confirmSellKit=function(id){const kit=window.state.kits.find(k=>k.id===id),qty=parseInt(document.getElementById('sk-qty').value)||1;if(qty>kit.stock)return alert(`Só há ${kit.stock} kit(s) disponíveis!`);const clientId=document.getElementById('sk-client').value,client=clientId?window.state.clients.find(c=>c.id===clientId):null,date=document.getElementById('sk-date').value;window.state.movements.push({id:genId(),type:'saida',bookId:`kit-${kit.id}`,bookTitle:`Kit: ${kit.name}`,quantity:qty,unitPrice:parseCur(kit.salePrice),freightCost:0,clientId,clientName:client?.name||'',date,notes:`Kit: ${kit.name}`});window.state.kits=window.state.kits.map(k=>k.id===id?{...k,stock:k.stock-qty}:k);saveState('movements');saveState('kits');closeModal();renderKits();toast('Venda registrada!');};
+window.sellKit=function(id){const kit=window.state.kits.find(k=>k.id===id);openModal(`Vender Kit: ${kit.name}`,`${fg('Quantidade de kits',inp('sk-qty','number','1','1'))}<div class="fg"><label>Cliente</label><select id="sk-client" style="width:100%"><option value="">Sem cliente</option>${window.state.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></div>${fg('Data',inp('sk-date','date',today()))}<div class="alert alert-green">Preço unitário: <strong>${BRL(kit.salePrice)}</strong> | Estoque disponível: <strong>${kit.stock}</strong></div><div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn btn-green" onclick="confirmSellKit('${kit.id}')">Confirmar Venda</button></div>`);};
+window.confirmSellKit=function(id){const kit=window.state.kits.find(k=>k.id===id),qty=parseInt(document.getElementById('sk-qty').value)||1;const clientId=document.getElementById('sk-client').value,client=clientId?window.state.clients.find(c=>c.id===clientId):null,date=document.getElementById('sk-date').value;window.state.movements.push({id:genId(),type:'saida',bookId:`kit-${kit.id}`,bookTitle:`Kit: ${kit.name}`,quantity:qty,unitPrice:parseCur(kit.salePrice),freightCost:0,clientId,clientName:client?.name||'',date,notes:`Kit: ${kit.name}`});window.state.kits=window.state.kits.map(k=>k.id===id?{...k,stock:k.stock-qty}:k);saveState('movements');saveState('kits');closeModal();renderKits();toast('Venda registrada!');};
 
 // ── CLIENTES ─────────────────────────────────────────────────────────────
 let cliSearch='';
@@ -1488,7 +1488,7 @@ window.saveMov2=function(){
       if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)+item.qty}):k;});
       else window.state.books=window.state.books.map(function(b){return b.id===item.bookId?Object.assign({},b,{stock:b.stock+item.qty}):b;});
     }else{
-      if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:Math.max(0,(k.stock||0)-item.qty)}):k;});
+      if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)-item.qty)}):k;});
       else window.state.books=window.state.books.map(function(b){return b.id===item.bookId?Object.assign({},b,{stock:b.stock-item.qty}):b;});
     }
   });
@@ -1594,7 +1594,7 @@ window.confirmShopifyImport=function(){
       clientId:'',clientName:r.customerName||'',ugcCode:r.discCode||'',discountPct:r.iD>0?+(r.iD/r.iP/r.iQ*100).toFixed(1):0,
       shopifyFee:fee,shippingPaid:r.shipping||0,shippingMethod:r.shippingMethod||'',
       cogs:(kit.costPrice||0)*r.iQ,date:r.date,orderNum:r.order,notes:'Shopify '+r.order+(r.customerName?' — '+r.customerName:''),source:'shopify'});
-    window.state.kits=window.state.kits.map(function(k){return k.id===r.kid?Object.assign({},k,{stock:Math.max(0,(k.stock||0)-r.iQ)}):k;});
+    window.state.kits=window.state.kits.map(function(k){return k.id===r.kid?Object.assign({},k,{stock:(k.stock||0)-r.iQ)}):k;});
     imported++;
   });
   saveState('movements');saveState('kits');closeModal();
