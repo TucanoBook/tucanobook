@@ -618,7 +618,7 @@ window.saveEditMov=function(id){
 // ── KITS ─────────────────────────────────────────────────────────────────
 window._kitItems=[];
 let _kitSearch='', _kitFilter='todos', _kitView='table';
-window.setKitSearch=function(v){_kitSearch=v;renderKits();};
+window.setKitSearch=function(v){_kitSearch=v;renderKits();var el=document.getElementById('kit-search');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}};
 window.setKitView=function(v){_kitView=v;renderKits()};
 window.setKitFilter=function(f){
   _kitFilter=f;
@@ -691,7 +691,7 @@ window.renderKits=function(){
     </div>`;}).join('')}</div>`;
   document.getElementById('content').innerHTML=`
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
-      <input class="search-input" id="kit-search" placeholder="🔍 Buscar kit..." oninput="setKitSearch(this.value)" style="max-width:240px">
+      <input class="search-input" id="kit-search" placeholder="🔍 Buscar kit..." oninput="setKitSearch(this.value)" value="${_kitSearch}" style="max-width:240px">
       <div class="filter-tabs" id="kit-filter-tabs">
         <button class="filter-tab ${_kitFilter==='todos'?'active':''}" onclick="setKitFilter('todos')">Todos</button>
         <button class="filter-tab ${_kitFilter==='mais_vendidos'?'active':''}" onclick="setKitFilter('mais_vendidos')">+ Vendidos</button>
