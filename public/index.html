@@ -1076,11 +1076,26 @@ window.removeCategory=function(i){if(!confirm('Remover categoria?'))return;windo
 window.addBookCategory=function(){const v=document.getElementById('new-bcat-inp')?.value?.trim();if(!v)return;if(!window.state.bookCategories)window.state.bookCategories=BCATS_DEFAULT.slice();if(window.state.bookCategories.includes(v))return;window.state.bookCategories.push(v);saveState('bookCategories');renderConfig();toast('Categoria de livro adicionada!');};
 window.removeBookCategory=function(i){if(!confirm('Remover categoria de livro?'))return;if(!window.state.bookCategories)window.state.bookCategories=BCATS_DEFAULT.slice();window.state.bookCategories.splice(i,1);saveState('bookCategories');renderConfig();};
 window.zerarEstoque=function(){
-  if(!confirm('⚠️ Isso vai zerar o estoque de TODOS os livros E kits. Confirma?'))return;
-  window.state.books=window.state.books.map(function(b){return Object.assign({},b,{stock:0});});
-  window.state.kits=window.state.kits.map(function(k){return Object.assign({},k,{stock:0});});
+  if(!confirm('⚠️ Isso vai zerar o estoque de TODOS os livros E kits e reaplicar as saídas existentes. Confirma?'))return;
+  var S=window.state;
+  // Zera tudo
+  S.books=S.books.map(function(b){return Object.assign({},b,{stock:0});});
+  S.kits=S.kits.map(function(k){return Object.assign({},k,{stock:0});});
+  // Reaplica todas as saídas/perdas/brindes já registradas para refletir saldo real
+  var saidas=S.movements.filter(function(m){return m.type==='saida'||m.type==='perda'||m.type==='brinde';});
+  saidas.forEach(function(m){
+    var isKit=m.bookId&&m.bookId.startsWith('kit-');
+    var kid=isKit?m.bookId.replace('kit-',''):'';
+    if(isKit){
+      S.kits=S.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)-m.quantity}):k;});
+    }else{
+      S.books=S.books.map(function(b){return b.id===m.bookId?Object.assign({},b,{stock:b.stock-m.quantity}):b;});
+    }
+  });
   saveState('books');saveState('kits');
-  toast('Estoque zerado! Agora lance as entradas de compra.');
+  toast('Estoque zerado com saídas reaplicadas. Agora lance as entradas de compra.');
+  if(window.renderKits)window.renderKits();
+  if(window.renderLivros)renderLivros();
 };
 window.downloadBackup=function(){const data=JSON.stringify(window.state,null,2);const blob=new Blob([data],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`tucanobook-backup-${today()}-${new Date().toTimeString().slice(0,8).replace(/:/g,'h')}.json`;a.click();URL.revokeObjectURL(url);toast('Backup baixado!');};
 window.restoreBackup=async function(input){
