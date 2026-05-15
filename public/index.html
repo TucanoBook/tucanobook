@@ -545,7 +545,7 @@ window.saveMov=function(){
   const qty=parseInt(document.getElementById('mov-qty').value)||0,price=parseCur(document.getElementById('mov-price').value);
   if(!bookId||!qty||!price)return alert('Preencha livro, quantidade e preço.');
   const book=window.state.books.find(b=>b.id===bookId);
-  if((type==='saida'||type==='brinde')&&book.stock<qty)return alert(`Estoque insuficiente! Disponível: ${book.stock}`);
+  // estoque negativo permitido — sem bloqueio de saída
   const freightImport=parseCur(document.getElementById('mov-frete-import')?.value)||0;const freightBR=parseCur(document.getElementById('mov-frete-br')?.value)||0;const freightCost=freightImport+freightBR;
   const supplierId=document.getElementById('mov-supplier')?.value||'';
   const supplier=supplierId?window.state.suppliers.find(s=>s.id===supplierId):null;
@@ -568,7 +568,7 @@ window.delMov=function(id){
   var kid=isKit?mov.bookId.replace('kit-',''):'';
   if(mov.type==='entrada'){
     if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:Math.max(0,(k.stock||0)-mov.quantity)}):k;});
-    else window.state.books=window.state.books.map(function(b){return b.id===mov.bookId?Object.assign({},b,{stock:Math.max(0,b.stock-mov.quantity)}):b;});
+    else window.state.books=window.state.books.map(function(b){return b.id===mov.bookId?Object.assign({},b,{stock:b.stock-mov.quantity}):b;});
   }else{
     if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)+mov.quantity}):k;});
     else window.state.books=window.state.books.map(function(b){return b.id===mov.bookId?Object.assign({},b,{stock:b.stock+mov.quantity}):b;});
@@ -738,8 +738,7 @@ window.saveKit=function(id){
   else{
     const buildQty=parseInt(document.getElementById('kf-qty-build')?.value)||1;
     // Check stock availability
-    for(const item of d.items){const b=window.state.books.find(bk=>bk.id===item.bookId);if(!b||b.stock<item.quantity*buildQty)return alert(`Estoque insuficiente de "${b?.title||'?'}"! Disponível: ${b?.stock||0}, necessário: ${item.quantity*buildQty}`);}
-    // Deduct stock
+    // Deduct stock (estoque negativo permitido)
     window.state.books=window.state.books.map(b=>{const item=d.items.find(i=>i.bookId===b.id);return item?{...b,stock:b.stock-item.quantity*buildQty}:b;});
     d.stock=buildQty;
     window.state.kits.push({...d,id:genId()});
@@ -763,7 +762,7 @@ window.buildMoreKit=function(id){
     const el=document.getElementById('bm-check');el.textContent=issues.length?issues.join('; '):`✅ Estoque suficiente para ${qty} kit(s).`;el.className='alert '+(issues.length?'alert-red':'alert-green');
   });
 };
-window.confirmBuildMore=function(id){const kit=window.state.kits.find(k=>k.id===id),qty=parseInt(document.getElementById('bm-qty').value)||1;for(const item of kit.items){const b=window.state.books.find(bk=>bk.id===item.bookId);if(!b||b.stock<item.quantity*qty)return alert(`Estoque insuficiente de "${b?.title}"!`);}window.state.books=window.state.books.map(b=>{const item=kit.items.find(i=>i.bookId===b.id);return item?{...b,stock:b.stock-item.quantity*qty}:b;});window.state.kits=window.state.kits.map(k=>k.id===id?{...k,stock:(k.stock||0)+qty}:k);saveState('books');saveState('kits');closeModal();renderKits();toast(`${qty} kit(s) montado(s)!`);};
+window.confirmBuildMore=function(id){const kit=window.state.kits.find(k=>k.id===id),qty=parseInt(document.getElementById('bm-qty').value)||1;window.state.books=window.state.books.map(b=>{const item=kit.items.find(i=>i.bookId===b.id);return item?{...b,stock:b.stock-item.quantity*qty}:b;});window.state.kits=window.state.kits.map(k=>k.id===id?{...k,stock:(k.stock||0)+qty}:k);saveState('books');saveState('kits');closeModal();renderKits();toast(`${qty} kit(s) montado(s)!`);};
 window.delKit=function(id){if(!confirm('Excluir kit? (o estoque dos livros NÃO será devolvido)'))return;window.state.kits=window.state.kits.filter(k=>k.id!==id);saveState('kits');renderKits();};
 window.sellKit=function(id){const kit=window.state.kits.find(k=>k.id===id);if(!kit.stock)return alert('Sem estoque de kits!');openModal(`Vender Kit: ${kit.name}`,`${fg('Quantidade de kits',inp('sk-qty','number','1','1'))}<div class="fg"><label>Cliente</label><select id="sk-client" style="width:100%"><option value="">Sem cliente</option>${window.state.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></div>${fg('Data',inp('sk-date','date',today()))}<div class="alert alert-green">Preço unitário: <strong>${BRL(kit.salePrice)}</strong> | Estoque disponível: <strong>${kit.stock}</strong></div><div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-gray" onclick="closeModal()">Cancelar</button><button class="btn btn-green" onclick="confirmSellKit('${kit.id}')">Confirmar Venda</button></div>`);};
 window.confirmSellKit=function(id){const kit=window.state.kits.find(k=>k.id===id),qty=parseInt(document.getElementById('sk-qty').value)||1;if(qty>kit.stock)return alert(`Só há ${kit.stock} kit(s) disponíveis!`);const clientId=document.getElementById('sk-client').value,client=clientId?window.state.clients.find(c=>c.id===clientId):null,date=document.getElementById('sk-date').value;window.state.movements.push({id:genId(),type:'saida',bookId:`kit-${kit.id}`,bookTitle:`Kit: ${kit.name}`,quantity:qty,unitPrice:parseCur(kit.salePrice),freightCost:0,clientId,clientName:client?.name||'',date,notes:`Kit: ${kit.name}`});window.state.kits=window.state.kits.map(k=>k.id===id?{...k,stock:k.stock-qty}:k);saveState('movements');saveState('kits');closeModal();renderKits();toast('Venda registrada!');};
@@ -1020,6 +1019,12 @@ async function renderConfig(){
         <label style="display:block;width:100%"><div class="btn btn-amber" style="width:100%;justify-content:center;cursor:pointer">⬆️ Selecionar arquivo .json</div><input type="file" accept=".json" onchange="restoreBackup(this)" style="display:none"></label>
         <div id="restore-status" style="margin-top:10px;font-size:12px;color:var(--sub)"></div>
       </div></div>
+      <div class="card" style="margin-top:14px;border:1.5px solid #fca5a5">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;color:#dc2626">🔄 Zerar Estoque de Livros</div>
+        <p style="font-size:13px;color:var(--sub);margin-bottom:14px">Zera o estoque de todos os livros componentes para <strong>0</strong>. Use quando quiser refazer o histórico de entradas do zero. Os kits montados não são afetados.</p>
+        <div class="alert alert-amber" style="font-size:12px;margin-bottom:14px">⚠️ O sistema passará a aceitar estoque negativo — isso é intencional para permitir lançar entradas e saídas fora de ordem.</div>
+        <button class="btn" style="background:#dc2626;color:#fff;width:100%;justify-content:center" onclick="zerarEstoque()">🔄 Zerar todos os estoques de livros</button>
+      </div>
       <div class="card">
         <div style="font-size:14px;font-weight:700;margin-bottom:8px">🤝 Configurar Sócios</div>
         <p style="font-size:13px;color:var(--sub);margin-bottom:14px">Defina os nomes e percentuais de participação para o relatório de divisão de custos.</p>
@@ -1037,6 +1042,13 @@ window.addCategory=function(){const v=document.getElementById('new-cat-inp')?.va
 window.removeCategory=function(i){if(!confirm('Remover categoria?'))return;window.state.expenseCategories.splice(i,1);saveState('expenseCategories');renderConfig();};
 window.addBookCategory=function(){const v=document.getElementById('new-bcat-inp')?.value?.trim();if(!v)return;if(!window.state.bookCategories)window.state.bookCategories=BCATS_DEFAULT.slice();if(window.state.bookCategories.includes(v))return;window.state.bookCategories.push(v);saveState('bookCategories');renderConfig();toast('Categoria de livro adicionada!');};
 window.removeBookCategory=function(i){if(!confirm('Remover categoria de livro?'))return;if(!window.state.bookCategories)window.state.bookCategories=BCATS_DEFAULT.slice();window.state.bookCategories.splice(i,1);saveState('bookCategories');renderConfig();};
+window.zerarEstoque=function(){
+  if(!confirm('⚠️ Isso vai zerar o estoque de TODOS os livros (componentes). Os kits montados NÃO serão afetados. Confirma?'))return;
+  window.state.books=window.state.books.map(function(b){return Object.assign({},b,{stock:0});});
+  saveState('books');
+  if(window.renderLivros)renderLivros();
+  toast('Estoque zerado! Agora lance as entradas de compra.');
+};
 window.downloadBackup=function(){const data=JSON.stringify(window.state,null,2);const blob=new Blob([data],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`tucanobook-backup-${today()}-${new Date().toTimeString().slice(0,8).replace(/:/g,'h')}.json`;a.click();URL.revokeObjectURL(url);toast('Backup baixado!');};
 window.restoreBackup=async function(input){
   const file=input.files[0];if(!file)return;
@@ -1420,7 +1432,7 @@ window.saveMov2=function(){
     var kit=kid?window.state.kits.find(function(k){return k.id===kid;}):null;
     var book=!isKit?window.state.books.find(function(b){return b.id===item.bookId;}):null;
     var stock=isKit?(kit?kit.stock||0:0):(book?book.stock:0);
-    if(type!=='entrada'&&stock<item.qty){alert('Estoque insuficiente: '+item.bookTitle);ok=false;}
+    // estoque negativo permitido — sem bloqueio
   });
   if(!ok)return;
   items.forEach(function(item){
@@ -1444,7 +1456,7 @@ window.saveMov2=function(){
       else window.state.books=window.state.books.map(function(b){return b.id===item.bookId?Object.assign({},b,{stock:b.stock+item.qty}):b;});
     }else{
       if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:Math.max(0,(k.stock||0)-item.qty)}):k;});
-      else window.state.books=window.state.books.map(function(b){return b.id===item.bookId?Object.assign({},b,{stock:Math.max(0,b.stock-item.qty)}):b;});
+      else window.state.books=window.state.books.map(function(b){return b.id===item.bookId?Object.assign({},b,{stock:b.stock-item.qty}):b;});
     }
   });
   saveState('movements');saveState('books');saveState('kits');
