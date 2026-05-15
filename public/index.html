@@ -1622,6 +1622,42 @@ window.recompraList=function(id){
   toast('Itens copiados — ajuste e salve como nova lista.');
 };
 
+window.seedCompra0514=function(){
+  var S=window.state;
+  if(!S.compraLists)S.compraLists=[];
+  var SEED_ID='seed-0514';
+  if(S.compraLists.find(function(l){return l.id===SEED_ID;})){
+    return alert('Lista 05/14 já foi importada.');
+  }
+  var items=[
+    {id:'c13',label:'Kit Banho Animais (4 livros)',isKit:false,qty:2},
+    {id:'c05',label:'Kit Fábulas (8 livros)',isKit:false,qty:50},
+    {id:'c08',label:'Kit Clássicos Divertidos (8 livros)',isKit:false,qty:21},
+    {id:'c01',label:'Kit Seu Lobato (8 livros)',isKit:false,qty:20},
+    {id:'c02',label:'Bíblia 3 Palavrinhas',isKit:false,qty:46},
+    {id:'c04',label:'365 Histórias da Bíblia',isKit:false,qty:43},
+    {id:'c06',label:'Kit Colorir Bíblico (8 un.)',isKit:false,qty:43},
+    {id:'c15',label:'Kit Turma da Mônica (8 livros)',isKit:false,qty:14},
+    {id:'c16',label:'Turma da Mônica 60 Atividades',isKit:false,qty:9},
+    {id:'c17',label:'Kit Livro Grande Animais (4 livros)',isKit:false,qty:2},
+    {id:'c09',label:'Divertida Mente: Raiva',isKit:false,qty:2},
+    {id:'c10',label:'Divertida Mente: Triste',isKit:false,qty:2},
+    {id:'c11',label:'Divertida Mente: Medo',isKit:false,qty:2},
+    {id:'c12',label:'Divertida Mente: Alegre',isKit:false,qty:2},
+    {id:'c07',label:'Amiguinhos do Criador (4 un.)',isKit:false,qty:17},
+  ];
+  var nums=S.compraLists.map(function(l){return l.num||0;});
+  var nextNum=(nums.length?Math.max.apply(null,nums):0)+1;
+  S.compraLists.push({id:SEED_ID,num:nextNum,date:'2026-05-14',items:items});
+  var costs={c13:9.29,c05:1.48,c08:1.50,c01:1.51,c02:2.09,c04:2.27,c06:0.45,c15:3.41,c16:2.05,c17:3.69,c09:2.86,c10:2.86,c11:2.86,c12:2.86,c07:0.82};
+  S.books=S.books.map(function(b){
+    return costs[b.id]!=null?Object.assign({},b,{costPrice:costs[b.id]}):b;
+  });
+  saveState('compraLists');saveState('books');
+  renderCompras();
+  toast('Lista 05/14 importada e preços de custo atualizados!');
+};
+
 function buildCompraTotals(items,S){
   var totals={},origins={};
   (items||[]).forEach(function(item){
@@ -1736,8 +1772,12 @@ function renderCompras(){
       +'</tr></thead><tbody>'+rows+'</tbody></table></div>';
   }
 
+  var hasSeed=S.compraLists.some(function(l){return l.id==='seed-0514';});
+  var seedBtn=hasSeed?'':'<button class="btn btn-sm" onclick="seedCompra0514()" style="font-size:11px;padding:5px 12px;background:#f59e0b;color:#fff;border:none">📥 Importar Lista 05/14</button>';
+
   document.getElementById('content').innerHTML=
-    '<div class="card" style="margin-bottom:14px">'
+    (seedBtn?'<div style="display:flex;justify-content:flex-end;margin-bottom:10px">'+seedBtn+'</div>':'')
+    +'<div class="card" style="margin-bottom:14px">'
     +'<div style="font-size:13px;font-weight:600;margin-bottom:12px">'+(isEditing?'✏️ Editando Lista #'+editNum:'🛒 Nova Lista de Compras')+'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 80px auto;gap:8px;align-items:end;margin-bottom:12px">'
     +'<div>'+ssHtml('compra-sel',allOpts,'Buscar kit ou livro...')+'</div>'
