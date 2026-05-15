@@ -1043,10 +1043,10 @@ window.removeCategory=function(i){if(!confirm('Remover categoria?'))return;windo
 window.addBookCategory=function(){const v=document.getElementById('new-bcat-inp')?.value?.trim();if(!v)return;if(!window.state.bookCategories)window.state.bookCategories=BCATS_DEFAULT.slice();if(window.state.bookCategories.includes(v))return;window.state.bookCategories.push(v);saveState('bookCategories');renderConfig();toast('Categoria de livro adicionada!');};
 window.removeBookCategory=function(i){if(!confirm('Remover categoria de livro?'))return;if(!window.state.bookCategories)window.state.bookCategories=BCATS_DEFAULT.slice();window.state.bookCategories.splice(i,1);saveState('bookCategories');renderConfig();};
 window.zerarEstoque=function(){
-  if(!confirm('⚠️ Isso vai zerar o estoque de TODOS os livros (componentes). Os kits montados NÃO serão afetados. Confirma?'))return;
+  if(!confirm('⚠️ Isso vai zerar o estoque de TODOS os livros E kits. Confirma?'))return;
   window.state.books=window.state.books.map(function(b){return Object.assign({},b,{stock:0});});
-  saveState('books');
-  if(window.renderLivros)renderLivros();
+  window.state.kits=window.state.kits.map(function(k){return Object.assign({},k,{stock:0});});
+  saveState('books');saveState('kits');
   toast('Estoque zerado! Agora lance as entradas de compra.');
 };
 window.downloadBackup=function(){const data=JSON.stringify(window.state,null,2);const blob=new Blob([data],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`tucanobook-backup-${today()}-${new Date().toTimeString().slice(0,8).replace(/:/g,'h')}.json`;a.click();URL.revokeObjectURL(url);toast('Backup baixado!');};
