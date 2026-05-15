@@ -557,8 +557,41 @@ window.saveMov=function(){
   const netPrice=discPct>0?price*(1-discPct/100):price;
   window.state.movements.push({id:genId(),type,bookId,bookTitle:book.title,quantity:qty,unitPrice:netPrice,grossUnitPrice:price,freightCost,freightImport,freightBR,supplierId,supplierName:supplier?.name||'',clientId,clientName:client?.name||'',ugcCode,discountPct:discPct,shopifyFee,date:document.getElementById('mov-date').value,notes:document.getElementById('mov-notes').value});
   window.state.books=window.state.books.map(b=>b.id===bookId?{...b,stock:b.stock+(type==='entrada'?qty:-qty)}:b); // brinde also deducts
-  saveState('movements');saveState('books');toast(type==='entrada'?'Entrada registrada!':'Saída registrada!');renderMovimentos();
+  saveState('movements');saveState('books');
+  if(type==='entrada')autoAssembleKits();
+  toast(type==='entrada'?'Entrada registrada!':'Saída registrada!');renderMovimentos();
 };
+
+// Monta automaticamente todos os kits possíveis com o estoque disponível
+function autoAssembleKits(){
+  var S=window.state;
+  var changed=false;
+  var progress=true;
+  while(progress){
+    progress=false;
+    S.kits.forEach(function(kit){
+      if(!kit.items||!kit.items.length)return;
+      var maxBuild=Infinity;
+      kit.items.forEach(function(ci){
+        var b=S.books.find(function(bk){return bk.id===ci.bookId;});
+        var can=b?Math.floor(b.stock/ci.quantity):0;
+        if(can<maxBuild)maxBuild=can;
+      });
+      if(maxBuild>0&&isFinite(maxBuild)){
+        S.books=S.books.map(function(b){
+          var ci=kit.items.find(function(i){return i.bookId===b.id;});
+          return ci?Object.assign({},b,{stock:b.stock-ci.quantity*maxBuild}):b;
+        });
+        S.kits=S.kits.map(function(k){
+          return k.id===kit.id?Object.assign({},k,{stock:(k.stock||0)+maxBuild}):k;
+        });
+        progress=true;changed=true;
+      }
+    });
+  }
+  if(changed){saveState('books');saveState('kits');}
+  return changed;
+}
 
 window.delMov=function(id){
   if(!confirm('Excluir este lançamento? O estoque será revertido.'))return;
@@ -1460,6 +1493,7 @@ window.saveMov2=function(){
     }
   });
   saveState('movements');saveState('books');saveState('kits');
+  if(type==='entrada')autoAssembleKits();
   closeModal();toast(items.length+' item(s) registrado(s)!');renderMovimentos();
 };
 
