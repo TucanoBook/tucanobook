@@ -600,7 +600,7 @@ window.delMov=function(id){
   var isKit=mov.bookId&&mov.bookId.startsWith('kit-');
   var kid=isKit?mov.bookId.replace('kit-',''):'';
   if(mov.type==='entrada'){
-    if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)-mov.quantity)}):k;});
+    if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)-mov.quantity}):k;});
     else window.state.books=window.state.books.map(function(b){return b.id===mov.bookId?Object.assign({},b,{stock:b.stock-mov.quantity}):b;});
   }else{
     if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)+mov.quantity}):k;});
@@ -1488,7 +1488,7 @@ window.saveMov2=function(){
       if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)+item.qty}):k;});
       else window.state.books=window.state.books.map(function(b){return b.id===item.bookId?Object.assign({},b,{stock:b.stock+item.qty}):b;});
     }else{
-      if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)-item.qty)}):k;});
+      if(isKit)window.state.kits=window.state.kits.map(function(k){return k.id===kid?Object.assign({},k,{stock:(k.stock||0)-item.qty}):k;});
       else window.state.books=window.state.books.map(function(b){return b.id===item.bookId?Object.assign({},b,{stock:b.stock-item.qty}):b;});
     }
   });
@@ -1594,7 +1594,7 @@ window.confirmShopifyImport=function(){
       clientId:'',clientName:r.customerName||'',ugcCode:r.discCode||'',discountPct:r.iD>0?+(r.iD/r.iP/r.iQ*100).toFixed(1):0,
       shopifyFee:fee,shippingPaid:r.shipping||0,shippingMethod:r.shippingMethod||'',
       cogs:(kit.costPrice||0)*r.iQ,date:r.date,orderNum:r.order,notes:'Shopify '+r.order+(r.customerName?' — '+r.customerName:''),source:'shopify'});
-    window.state.kits=window.state.kits.map(function(k){return k.id===r.kid?Object.assign({},k,{stock:(k.stock||0)-r.iQ)}):k;});
+    window.state.kits=window.state.kits.map(function(k){return k.id===r.kid?Object.assign({},k,{stock:(k.stock||0)-r.iQ}):k;});
     imported++;
   });
   saveState('movements');saveState('kits');closeModal();
